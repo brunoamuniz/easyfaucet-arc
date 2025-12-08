@@ -6,6 +6,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Add empty turbopack config to silence error (we're using webpack)
+  turbopack: {},
   webpack: (config, { isServer, webpack }) => {
     // Ignore optional dependencies that may not be installed
     if (!isServer) {
