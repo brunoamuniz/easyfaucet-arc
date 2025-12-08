@@ -101,6 +101,7 @@ export default function FaucetPage() {
   const [destinationAddress, setDestinationAddress] = useState<string>("");
   const [addressValidationError, setAddressValidationError] = useState<string>("");
   const [isClaiming, setIsClaiming] = useState<boolean>(false);
+  const [errorTimestamp, setErrorTimestamp] = useState<number>(0);
 
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== ARC_TESTNET_CHAIN_ID;
@@ -182,6 +183,15 @@ export default function FaucetPage() {
     },
   });
 
+  const { data: totalClaims, refetch: refetchTotalClaims } = useReadContract({
+    address: FAUCET_CONTRACT_ADDRESS,
+    abi: ARCTESTNET_FAUCET_ABI,
+    functionName: "totalClaims",
+    query: {
+      enabled: true, // Always enabled - no wallet needed
+      refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
+    },
+  });
 
   // Extract canClaim results
   const canClaimResult = useMemo(() => {
@@ -194,9 +204,30 @@ export default function FaucetPage() {
 
   // Update status based on wallet, network, and contract state
   useEffect(() => {
-    // Don't override success status - let user see the success message
-    if (faucetStatus === "success") {
+    // Don't override success or loading status - let user see the messages
+    if (faucetStatus === "success" || faucetStatus === "loading") {
       return;
+    }
+
+    // For error status, allow override after 5 seconds to check if transaction actually succeeded
+    if (faucetStatus === "error") {
+      const now = Date.now();
+      if (errorTimestamp > 0 && now - errorTimestamp < 5000) {
+        // Keep error status for at least 5 seconds
+        return;
+      }
+      // After 5 seconds, check if transaction actually succeeded on-chain
+      // If canClaim shows cooldown, it means the claim was successful
+      if (canClaimResult && !canClaimResult.allowed && canClaimResult.remainingSeconds > 0) {
+        // Transaction succeeded! Update to success
+        setFaucetStatus("success");
+        setErrorMessage("");
+        setErrorTimestamp(0); // Clear error timestamp
+        if (destinationAddress) {
+          storeSuccessfulClaim(destinationAddress);
+        }
+        return;
+      }
     }
 
     // Check if destination address is provided and valid
@@ -250,7 +281,7 @@ export default function FaucetPage() {
     }
 
     setFaucetStatus("idle");
-  }, [paused, canClaimResult, faucetBalance, faucetStatus, destinationAddress, isValidDestinationAddress]);
+  }, [paused, canClaimResult, faucetBalance, faucetStatus, destinationAddress, isValidDestinationAddress, errorTimestamp]);
 
   const handleClaim = async () => {
     // Validate destination address
@@ -305,12 +336,20 @@ export default function FaucetPage() {
         // Handle error response
         setErrorMessage(data.error || data.message || "Failed to claim tokens");
         setFaucetStatus("error");
+        setErrorTimestamp(Date.now());
         
         // Handle cooldown specifically
         if (data.remainingSeconds) {
           setRemainingCooldownSeconds(data.remainingSeconds);
           setFaucetStatus("cooldown");
+          setErrorTimestamp(0); // Clear error timestamp for cooldown
         }
+        
+        // Refetch canClaim to check if transaction actually succeeded despite API error
+        setTimeout(() => {
+          refetchCanClaim();
+        }, 3000);
+        
         setIsClaiming(false);
         return;
       }
@@ -318,21 +357,31 @@ export default function FaucetPage() {
       // Success
       setTxHash(data.transactionHash);
       setFaucetStatus("success");
+      setErrorTimestamp(0); // Clear any error timestamp
+      setErrorMessage(""); // Clear any error message
       
       // Store successful claim in localStorage
       if (recipientAddress) {
         storeSuccessfulClaim(recipientAddress);
       }
 
-      // Refetch canClaim to update UI
+      // Refetch canClaim and totalClaims to update UI immediately
       setTimeout(() => {
         refetchCanClaim();
+        refetchTotalClaims(); // Update claim counter immediately
         setIsClaiming(false);
       }, 2000);
     } catch (error) {
       console.error("Claim error:", error);
       setErrorMessage("Failed to claim tokens. Please try again.");
       setFaucetStatus("error");
+      setErrorTimestamp(Date.now());
+      
+      // Refetch canClaim to check if transaction actually succeeded despite error
+      setTimeout(() => {
+        refetchCanClaim();
+      }, 3000);
+      
       setIsClaiming(false);
     }
   };
@@ -399,49 +448,8 @@ export default function FaucetPage() {
           </p>
         </div>
 
-        {/* Alerts */}
-        <div className="space-y-4 mb-4">
-
-          {faucetStatus === "paused" && (
-            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
-              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
-              <AlertTitle style={{ color: "#EF4444" }}>Faucet paused</AlertTitle>
-              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
-                The faucet is temporarily paused for maintenance. Please try again later.
-              </AlertDescription>
-            </Alert>
-          )}
-
-
-          {faucetStatus === "cooldown" && (
-            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
-              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
-              <AlertTitle style={{ color: "#EF4444" }}>Cooldown active</AlertTitle>
-              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
-                This address can only request faucet once every 24 hours.
-                {remainingCooldownSeconds > 0 && (
-                  <span className="block mt-1">
-                    Time remaining: {formatRemainingTime(remainingCooldownSeconds)}
-                  </span>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {faucetStatus === "no_funds" && (
-            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
-              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
-              <AlertTitle style={{ color: "#EF4444" }}>Faucet empty</AlertTitle>
-              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
-                The faucet is currently out of funds. Please try again later.
-              </AlertDescription>
-            </Alert>
-          )}
-
-        </div>
-
         {/* Destination Address Input */}
-        <div className="mb-4 space-y-2">
+        <div className="mb-4 space-y-1">
           <Label htmlFor="destination-address" className="text-sm" style={{ color: "#F9FAFB" }}>
             Destination address
           </Label>
@@ -522,6 +530,47 @@ export default function FaucetPage() {
               </AlertDescription>
             </Alert>
           )}
+        </div>
+
+        {/* Alerts */}
+        <div className="space-y-4 mb-4">
+
+          {faucetStatus === "paused" && (
+            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
+              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
+              <AlertTitle style={{ color: "#EF4444" }}>Faucet paused</AlertTitle>
+              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
+                The faucet is temporarily paused for maintenance. Please try again later.
+              </AlertDescription>
+            </Alert>
+          )}
+
+
+          {faucetStatus === "cooldown" && (
+            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
+              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
+              <AlertTitle style={{ color: "#EF4444" }}>Cooldown active</AlertTitle>
+              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
+                This address can only request faucet once every 24 hours.
+                {remainingCooldownSeconds > 0 && (
+                  <span className="block mt-1">
+                    Time remaining: {formatRemainingTime(remainingCooldownSeconds)}
+                  </span>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {faucetStatus === "no_funds" && (
+            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
+              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
+              <AlertTitle style={{ color: "#EF4444" }}>Faucet empty</AlertTitle>
+              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
+                The faucet is currently out of funds. Please try again later.
+              </AlertDescription>
+            </Alert>
+          )}
+
         </div>
 
         {/* Faucet Balance - Above Claim Button */}
@@ -651,6 +700,21 @@ export default function FaucetPage() {
             </p>
           </div>
         </div>
+
+        {/* Total Claims Counter - Social Proof */}
+        {totalClaims !== undefined && (
+          <div className="mb-4 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg" style={{ background: "#1E293B" }}>
+              <Info className="h-4 w-4" style={{ color: "#9CA3AF" }} />
+              <span className="text-sm font-medium" style={{ color: "#F9FAFB" }}>
+                <span style={{ color: "#22C55E", fontWeight: "600" }}>
+                  {typeof totalClaims === "bigint" ? totalClaims.toString() : totalClaims || "0"}
+                </span>
+                {" "}claims processed
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Info Box */}
         <div className="space-y-2 p-4 rounded-lg" style={{ background: "#1E293B" }}>

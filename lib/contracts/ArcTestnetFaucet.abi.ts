@@ -105,6 +105,19 @@ export const ARCTESTNET_FAUCET_ABI = [
   },
   {
     "type": "function",
+    "name": "totalClaims",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "lastClaimAt",
     "inputs": [
       {

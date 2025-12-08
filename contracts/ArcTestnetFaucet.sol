@@ -20,6 +20,7 @@ contract ArcTestnetFaucet is Ownable, ReentrancyGuard {
     uint256 public claimAmount;
     uint256 public cooldown;
     bool public paused;
+    uint256 public totalClaims; // Total number of successful claims (social proof)
 
     // Mapping to track last claim timestamp per address
     mapping(address => uint256) public lastClaimAt;
@@ -92,6 +93,7 @@ contract ArcTestnetFaucet is Ownable, ReentrancyGuard {
 
         // Update state (Effects) - cooldown is per recipient
         lastClaimAt[recipient] = block.timestamp;
+        totalClaims++; // Increment total claims counter
 
         // Transfer tokens to recipient (Interactions)
         token.safeTransfer(recipient, claimAmount);
