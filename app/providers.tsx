@@ -19,10 +19,10 @@ const queryClient = new QueryClient({
 
 // Configure wallets using RainbowKit's getDefaultWallets
 // This automatically includes MetaMask, WalletConnect, Coinbase Wallet, etc.
+// Note: chains are configured in createConfig below, not here
 const { connectors } = getDefaultWallets({
   appName: "Easy Faucet Arc Testnet",
-  projectId: "YOUR_PROJECT_ID", // TODO: Get from https://cloud.walletconnect.com (optional but recommended)
-  chains: [arcTestnet],
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "YOUR_PROJECT_ID", // Optional but recommended for WalletConnect
 });
 
 // Create storage for persistence

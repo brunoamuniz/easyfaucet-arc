@@ -12,8 +12,10 @@ import { ARCTESTNET_FAUCET_ABI } from "@/lib/contracts/ArcTestnetFaucet.abi";
 import { decodeFaucetError, formatRemainingTime } from "@/lib/utils/errorDecoder";
 import { arcTestnet } from "@/lib/config/chains";
 
-// TODO: replace with real deployed URL
-const APP_URL = "https://your-app-url.example";
+// App URL - defaults to Vercel deployment URL if available
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL 
+  ? `https://${process.env.VERCEL_URL || process.env.NEXT_PUBLIC_APP_URL}`
+  : "https://easyfaucet-arc.vercel.app";
 
 type FaucetStatus =
   | "idle"
@@ -345,6 +347,15 @@ export default function FaucetPage() {
           </div>
         </div>
 
+        {/* Faucet Balance - Discreet Info */}
+        {faucetBalance !== undefined && (
+          <div className="mb-4 text-center">
+            <p className="text-xs" style={{ color: "#6B7280" }}>
+              Available: {Number(faucetBalance) / 1_000_000} USDC (testnet)
+            </p>
+          </div>
+        )}
+
         {/* Alerts */}
         <div className="space-y-4 mb-6">
           {faucetStatus === "no_wallet" && (
@@ -585,7 +596,19 @@ export default function FaucetPage() {
           <ul className="space-y-2 text-sm" style={{ color: "#9CA3AF" }}>
             <li className="flex items-start">
               <span className="mr-2">•</span>
-              <span>The official faucet allows only 1 USDC per hour.</span>
+              <span>
+                The{" "}
+                <a
+                  href="https://faucet.circle.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline transition-colors"
+                  style={{ color: "#2F2CFF" }}
+                >
+                  official faucet
+                </a>{" "}
+                allows only 1 USDC per hour.
+              </span>
             </li>
             <li className="flex items-start">
               <span className="mr-2">•</span>
@@ -594,10 +617,6 @@ export default function FaucetPage() {
             <li className="flex items-start">
               <span className="mr-2">•</span>
               <span>You can request only once every 24 hours from this device.</span>
-            </li>
-            <li className="flex items-start">
-              <span className="mr-2">•</span>
-              <span>Maximum amount: 100 USDC (testnet) per claim.</span>
             </li>
           </ul>
         </div>
