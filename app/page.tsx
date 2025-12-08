@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useAccount, useChainId, useSwitchChain, useReadContract, useWriteContract, useWaitForTransactionReceipt, useReconnect } from "wagmi";
+import { useAccount, useChainId, useSwitchChain, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -91,9 +91,6 @@ export default function FaucetPage() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
-  
-  // Auto-reconnect on mount
-  useReconnect();
 
   const [faucetStatus, setFaucetStatus] = useState<FaucetStatus>("idle");
   const [txHash, setTxHash] = useState<string>("");
