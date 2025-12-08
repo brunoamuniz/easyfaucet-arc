@@ -12,10 +12,8 @@ import { ARCTESTNET_FAUCET_ABI } from "@/lib/contracts/ArcTestnetFaucet.abi";
 import { decodeFaucetError, formatRemainingTime } from "@/lib/utils/errorDecoder";
 import { arcTestnet } from "@/lib/config/chains";
 
-// App URL - defaults to Vercel deployment URL if available
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL 
-  ? `https://${process.env.VERCEL_URL || process.env.NEXT_PUBLIC_APP_URL}`
-  : "https://easyfaucet-arc.vercel.app";
+// App URL - defaults to production domain
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://easyfaucetarc.xyz";
 
 type FaucetStatus =
   | "idle"
@@ -314,7 +312,11 @@ export default function FaucetPage() {
   const explorerUrl = `${arcTestnet.blockExplorers?.default.url}/tx/${txHash}`;
 
   // Twitter share URL
-  const tweetText = `I'm claiming 100 USDC on ARC testnet using Easy Faucet Arc Testnet to power my dApp testing. Try it here: ${APP_URL}`;
+  const tweetText = `I'm claiming 100 USDC on ARC testnet using Easy Faucet Arc to power my dApp testing! 🚀
+
+@ARC ${APP_URL}
+
+#ARC #DeFi #Web3 #ARCTestnet`;
   const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
 
   return (
