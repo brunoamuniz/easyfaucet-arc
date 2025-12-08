@@ -7,8 +7,8 @@
  * - ARC_TESTNET_CHAIN_ID: Actual ARC Testnet chain ID
  */
 
-// Deployed faucet contract address on ARC Testnet
-export const FAUCET_CONTRACT_ADDRESS = "0xD7bD62c4B93873E18Cb5E82709ceA18902ac82BF" as const;
+// Deployed faucet contract address on ARC Testnet (with claimFor function - gasless)
+export const FAUCET_CONTRACT_ADDRESS = "0xbDA9712b00176b2bC3CE9abfD3EdF0742b2bDe2A" as const;
 
 // USDC testnet token address on ARC Testnet
 // Source: https://testnet.arcscan.app/token/0x3600000000000000000000000000000000000000

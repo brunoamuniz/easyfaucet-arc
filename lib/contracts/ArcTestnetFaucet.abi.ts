@@ -2,7 +2,7 @@
  * ABI for ArcTestnetFaucet contract
  * 
  * Auto-generated from compiled contract artifacts.
- * Updated: 2025-12-08 11:32:39
+ * Updated: 2025-12-08 (Gasless implementation - claimFor onlyOwner)
  */
 
 export const ARCTESTNET_FAUCET_ABI = [
@@ -53,8 +53,14 @@ export const ARCTESTNET_FAUCET_ABI = [
   },
   {
     "type": "function",
-    "name": "claim",
-    "inputs": [],
+    "name": "claimFor",
+    "inputs": [
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },

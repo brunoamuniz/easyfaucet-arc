@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useAccount, useChainId, useSwitchChain, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useChainId, useSwitchChain, useReadContract } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, CheckCircle2, AlertCircle, Info, ChevronDown, ExternalLink } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { isAddress } from "viem";
 import { FAUCET_CONTRACT_ADDRESS, ARC_TESTNET_CHAIN_ID } from "@/lib/config/faucet";
 import { ARCTESTNET_FAUCET_ABI } from "@/lib/contracts/ArcTestnetFaucet.abi";
 import { decodeFaucetError, formatRemainingTime } from "@/lib/utils/errorDecoder";
@@ -95,18 +98,67 @@ export default function FaucetPage() {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [remainingCooldownSeconds, setRemainingCooldownSeconds] = useState<number>(0);
   const [isTutorialExpanded, setIsTutorialExpanded] = useState<boolean>(false);
+  const [destinationAddress, setDestinationAddress] = useState<string>("");
+  const [addressValidationError, setAddressValidationError] = useState<string>("");
+  const [isClaiming, setIsClaiming] = useState<boolean>(false);
 
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== ARC_TESTNET_CHAIN_ID;
 
-  // Read contract state
+  // Validate destination address
+  const isValidDestinationAddress = useMemo(() => {
+    if (!destinationAddress) return false;
+    try {
+      return isAddress(destinationAddress);
+    } catch {
+      return false;
+    }
+  }, [destinationAddress]);
+
+  // Auto-fill destination address when wallet connects
+  useEffect(() => {
+    if (isConnected && address && !destinationAddress) {
+      setDestinationAddress(address);
+      setAddressValidationError("");
+    }
+  }, [isConnected, address, destinationAddress]);
+
+  // Validate address on change
+  useEffect(() => {
+    if (destinationAddress) {
+      try {
+        if (!isAddress(destinationAddress)) {
+          setAddressValidationError("Please enter a valid ARC-compatible address.");
+        } else {
+          setAddressValidationError("");
+        }
+      } catch {
+        setAddressValidationError("Please enter a valid ARC-compatible address.");
+      }
+    } else {
+      setAddressValidationError("");
+    }
+  }, [destinationAddress]);
+
+  // Read contract state - use destinationAddress if available
+  const recipientForCheck = (() => {
+    if (destinationAddress && isValidDestinationAddress) {
+      try {
+        return isAddress(destinationAddress) ? (destinationAddress as `0x${string}`) : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  })();
+  
   const { data: canClaimData, refetch: refetchCanClaim } = useReadContract({
     address: FAUCET_CONTRACT_ADDRESS,
     abi: ARCTESTNET_FAUCET_ABI,
     functionName: "canClaim",
-    args: address ? [address] : undefined,
+    args: recipientForCheck ? [recipientForCheck as `0x${string}`] : undefined,
     query: {
-      enabled: isConnected && !isWrongNetwork && !!address,
+      enabled: !!recipientForCheck,
       refetchInterval: 5000, // Refetch every 5 seconds
     },
   });
@@ -116,7 +168,7 @@ export default function FaucetPage() {
     abi: ARCTESTNET_FAUCET_ABI,
     functionName: "paused",
     query: {
-      enabled: isConnected && !isWrongNetwork,
+      enabled: true, // Always enabled - no wallet needed
     },
   });
 
@@ -125,18 +177,11 @@ export default function FaucetPage() {
     abi: ARCTESTNET_FAUCET_ABI,
     functionName: "faucetBalance",
     query: {
-      enabled: isConnected && !isWrongNetwork,
+      enabled: true, // Always enabled - no wallet needed
       refetchInterval: 10000, // Refetch every 10 seconds
     },
   });
 
-  // Write contract
-  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
-
-  // Wait for transaction
-  const { isLoading: isConfirming, isSuccess: isConfirmed, error: receiptError } = useWaitForTransactionReceipt({
-    hash,
-  });
 
   // Extract canClaim results
   const canClaimResult = useMemo(() => {
@@ -154,13 +199,9 @@ export default function FaucetPage() {
       return;
     }
 
-    if (!isConnected || !address) {
-      setFaucetStatus("no_wallet");
-      return;
-    }
-
-    if (isWrongNetwork) {
-      setFaucetStatus("wrong_network");
+    // Check if destination address is provided and valid
+    if (!destinationAddress || !isValidDestinationAddress) {
+      setFaucetStatus("idle");
       return;
     }
 
@@ -192,8 +233,9 @@ export default function FaucetPage() {
 
     // Check local cooldown only if contract doesn't have data yet
     // Once contract responds, it becomes the source of truth
-    if (!canClaimResult) {
-      const localCooldown = checkLocalCooldown(address);
+    // Use destinationAddress for cooldown check
+    if (!canClaimResult && destinationAddress && isValidDestinationAddress) {
+      const localCooldown = checkLocalCooldown(destinationAddress);
       if (localCooldown.isInCooldown) {
         setFaucetStatus("cooldown");
         setRemainingCooldownSeconds(Math.floor(localCooldown.remainingTime / 1000));
@@ -208,106 +250,104 @@ export default function FaucetPage() {
     }
 
     setFaucetStatus("idle");
-  }, [isConnected, address, isWrongNetwork, paused, canClaimResult, faucetBalance, faucetStatus]);
-
-  // Handle transaction states
-  useEffect(() => {
-    if (isPending) {
-      setFaucetStatus("loading");
-      setTxHash("");
-      setErrorMessage("");
-      // Clear success status when starting a new claim
-    }
-  }, [isPending]);
-
-  useEffect(() => {
-    if (hash) {
-      setTxHash(hash);
-    }
-  }, [hash]);
-
-  useEffect(() => {
-    if (isConfirming && hash) {
-      setFaucetStatus("loading");
-      setTxHash(hash);
-    }
-  }, [isConfirming, hash]);
-
-  useEffect(() => {
-    if (isConfirmed && hash) {
-      setFaucetStatus("success");
-      setTxHash(hash);
-      if (address) {
-        storeSuccessfulClaim(address);
-        // Refetch canClaim to update UI
-        setTimeout(() => {
-          refetchCanClaim();
-        }, 2000);
-      }
-    }
-  }, [isConfirmed, hash, address, refetchCanClaim]);
-
-  // Handle errors
-  useEffect(() => {
-    if (writeError) {
-      const decoded = decodeFaucetError(writeError);
-      setErrorMessage(decoded.message);
-      setRemainingCooldownSeconds(decoded.remainingSeconds || 0);
-
-      if (decoded.type === "CooldownActive") {
-        setFaucetStatus("cooldown");
-      } else if (decoded.type === "FaucetEmpty" || decoded.type === "InsufficientFaucetBalance") {
-        setFaucetStatus("no_funds");
-      } else if (decoded.type === "Paused") {
-        setFaucetStatus("paused");
-      } else {
-        setFaucetStatus("error");
-      }
-    }
-  }, [writeError]);
-
-  useEffect(() => {
-    if (receiptError) {
-      const decoded = decodeFaucetError(receiptError);
-      setErrorMessage(decoded.message);
-      setFaucetStatus("error");
-    }
-  }, [receiptError]);
+  }, [paused, canClaimResult, faucetBalance, faucetStatus, destinationAddress, isValidDestinationAddress]);
 
   const handleClaim = async () => {
-    if (!address || isWrongNetwork) return;
+    // Validate destination address
+    if (!destinationAddress || !isValidDestinationAddress) {
+      setAddressValidationError("Please enter a valid ARC-compatible address.");
+      setFaucetStatus("idle");
+      return;
+    }
+
+    // Ensure address is valid format
+    const recipientAddress = destinationAddress as `0x${string}`;
+    if (!isAddress(recipientAddress)) {
+      setAddressValidationError("Please enter a valid ARC-compatible address.");
+      setFaucetStatus("idle");
+      return;
+    }
+
+    // Prevent multiple simultaneous requests
+    if (faucetStatus === "loading" || isClaiming) {
+      return;
+    }
 
     try {
-      // Clear previous success/error messages when starting a new claim
+      // Set loading state immediately
+      setIsClaiming(true);
       setFaucetStatus("loading");
       setErrorMessage("");
-      writeContract({
-        address: FAUCET_CONTRACT_ADDRESS,
-        abi: ARCTESTNET_FAUCET_ABI,
-        functionName: "claim",
+      setAddressValidationError("");
+      setTxHash("");
+      
+      // Call API to process claim (gasless)
+      const response = await fetch("/api/claim", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ address: recipientAddress }),
       });
+
+      // Check if response is ok before parsing JSON
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error("Failed to parse response:", parseError);
+        setErrorMessage("Failed to process response. Please try again.");
+        setFaucetStatus("error");
+        return;
+      }
+
+      if (!response.ok) {
+        // Handle error response
+        setErrorMessage(data.error || data.message || "Failed to claim tokens");
+        setFaucetStatus("error");
+        
+        // Handle cooldown specifically
+        if (data.remainingSeconds) {
+          setRemainingCooldownSeconds(data.remainingSeconds);
+          setFaucetStatus("cooldown");
+        }
+        setIsClaiming(false);
+        return;
+      }
+
+      // Success
+      setTxHash(data.transactionHash);
+      setFaucetStatus("success");
+      
+      // Store successful claim in localStorage
+      if (recipientAddress) {
+        storeSuccessfulClaim(recipientAddress);
+      }
+
+      // Refetch canClaim to update UI
+      setTimeout(() => {
+        refetchCanClaim();
+        setIsClaiming(false);
+      }, 2000);
     } catch (error) {
       console.error("Claim error:", error);
-      const decoded = decodeFaucetError(error);
-      setErrorMessage(decoded.message);
+      setErrorMessage("Failed to claim tokens. Please try again.");
       setFaucetStatus("error");
+      setIsClaiming(false);
     }
   };
 
-  const handleSwitchNetwork = () => {
-    if (switchChain) {
-      switchChain({ chainId: ARC_TESTNET_CHAIN_ID });
-    }
-  };
 
   const isClaimDisabled =
-    !isConnected ||
-    isWrongNetwork ||
+    !destinationAddress ||
+    !isValidDestinationAddress ||
     faucetStatus === "loading" ||
+    isClaiming ||
     faucetStatus === "cooldown" ||
     faucetStatus === "paused" ||
     paused === true ||
-    (canClaimResult !== null && canClaimResult !== undefined && !canClaimResult.allowed);
+    (canClaimResult !== null && canClaimResult !== undefined && !canClaimResult.allowed) ||
+    !!addressValidationError;
 
   const explorerUrl = `${arcTestnet.blockExplorers?.default.url}/tx/${txHash}`;
 
@@ -340,49 +380,27 @@ export default function FaucetPage() {
         </div>
 
         {/* Wallet Connection - Centralized and Styled */}
-        <div className="mb-6 flex items-center justify-center w-full">
+        <div className="mb-4 flex items-center justify-center w-full">
           <div className="w-full max-w-[400px] flex justify-center">
             <ConnectButton showBalance={false} />
           </div>
         </div>
 
-        {/* Faucet Balance - Discreet Info */}
-        {faucetBalance !== undefined && (
-          <div className="mb-4 text-center">
-            <p className="text-xs" style={{ color: "#6B7280" }}>
-              Available: {Number(faucetBalance) / 1_000_000} USDC (testnet)
-            </p>
-          </div>
-        )}
+        {/* Info text about wallet connection */}
+        <div className="mb-4 text-center space-y-1">
+          <p className="text-xs" style={{ color: "#6B7280" }}>
+            Connect your wallet to auto-fill the address
+          </p>
+          <p className="text-xs font-medium" style={{ color: "#9CA3AF" }}>
+            OR
+          </p>
+          <p className="text-xs" style={{ color: "#6B7280" }}>
+            enter manually below
+          </p>
+        </div>
 
         {/* Alerts */}
-        <div className="space-y-4 mb-6">
-          {faucetStatus === "no_wallet" && (
-            <Alert className="border" style={{ background: "#050B18", borderColor: "#1E293B" }}>
-              <Info className="h-4 w-4" style={{ color: "#9CA3AF" }} />
-              <AlertDescription style={{ color: "#9CA3AF" }}>
-                Connect your wallet to request testnet funds.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {faucetStatus === "wrong_network" && (
-            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
-              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
-              <AlertTitle style={{ color: "#EF4444" }}>Wrong network</AlertTitle>
-              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
-                Please switch to the ARC Testnet to use this faucet.
-              </AlertDescription>
-              <Button
-                onClick={handleSwitchNetwork}
-                size="sm"
-                className="mt-3"
-                style={{ background: "#EF4444", color: "#F9FAFB" }}
-              >
-                Switch Network
-              </Button>
-            </Alert>
-          )}
+        <div className="space-y-4 mb-4">
 
           {faucetStatus === "paused" && (
             <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
@@ -394,18 +412,81 @@ export default function FaucetPage() {
             </Alert>
           )}
 
+
+          {faucetStatus === "cooldown" && (
+            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
+              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
+              <AlertTitle style={{ color: "#EF4444" }}>Cooldown active</AlertTitle>
+              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
+                This address can only request faucet once every 24 hours.
+                {remainingCooldownSeconds > 0 && (
+                  <span className="block mt-1">
+                    Time remaining: {formatRemainingTime(remainingCooldownSeconds)}
+                  </span>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {faucetStatus === "no_funds" && (
+            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
+              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
+              <AlertTitle style={{ color: "#EF4444" }}>Faucet empty</AlertTitle>
+              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
+                The faucet is currently out of funds. Please try again later.
+              </AlertDescription>
+            </Alert>
+          )}
+
+        </div>
+
+        {/* Destination Address Input */}
+        <div className="mb-4 space-y-2">
+          <Label htmlFor="destination-address" className="text-sm" style={{ color: "#F9FAFB" }}>
+            Destination address
+          </Label>
+          <Input
+            id="destination-address"
+            type="text"
+            placeholder="0x1234...ABCD"
+            value={destinationAddress}
+            onChange={(e) => setDestinationAddress(e.target.value)}
+            className="w-full"
+            style={{
+              background: "#1E293B",
+              borderColor: addressValidationError ? "#EF4444" : "#1E293B",
+              color: "#F9FAFB",
+            }}
+            aria-invalid={!!addressValidationError}
+          />
+          {addressValidationError ? (
+            <p className="text-xs" style={{ color: "#EF4444" }}>
+              {addressValidationError}
+            </p>
+          ) : (
+            <p className="text-xs" style={{ color: "#6B7280" }}>
+              Paste a valid ARC-compatible (EVM) address. {isConnected && address && "Your connected address has been auto-filled."}
+            </p>
+          )}
+
+          {/* Success/Error Messages */}
           {faucetStatus === "success" && (
-            <Alert className="border" style={{ background: "#050B18", borderColor: "#22C55E" }}>
+            <Alert className="border mt-2" style={{ background: "#050B18", borderColor: "#22C55E" }}>
               <CheckCircle2 className="h-5 w-5" style={{ color: "#22C55E" }} />
               <AlertTitle style={{ color: "#22C55E", fontSize: "18px", fontWeight: "600" }}>
                 ✅ Claim Successful!
               </AlertTitle>
               <AlertDescription style={{ color: "#E5E7EB" }} className="mt-3 space-y-2">
                 <p className="text-base">
-                  <strong>100 USDC (testnet)</strong> has been sent to your wallet address.
+                  <strong>100 USDC (testnet)</strong> has been sent to the selected address.
                 </p>
+                {destinationAddress && (
+                  <p className="text-xs font-mono" style={{ color: "#9CA3AF" }}>
+                    {destinationAddress.slice(0, 6)}...{destinationAddress.slice(-4)}
+                  </p>
+                )}
                 <p className="text-sm" style={{ color: "#9CA3AF" }}>
-                  It may take a few moments to appear in your wallet.
+                  It may take a few moments to appear in the wallet.
                 </p>
                 {txHash && (
                   <div className="mt-4 pt-3 border-t" style={{ borderColor: "#1F2937" }}>
@@ -432,33 +513,8 @@ export default function FaucetPage() {
             </Alert>
           )}
 
-          {faucetStatus === "cooldown" && (
-            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
-              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
-              <AlertTitle style={{ color: "#EF4444" }}>Cooldown active</AlertTitle>
-              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
-                You can only request faucet once every 24 hours from this device.
-                {remainingCooldownSeconds > 0 && (
-                  <span className="block mt-1">
-                    Time remaining: {formatRemainingTime(remainingCooldownSeconds)}
-                  </span>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {faucetStatus === "no_funds" && (
-            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
-              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
-              <AlertTitle style={{ color: "#EF4444" }}>Faucet empty</AlertTitle>
-              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
-                The faucet is currently out of funds. Please try again later.
-              </AlertDescription>
-            </Alert>
-          )}
-
           {faucetStatus === "error" && (
-            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
+            <Alert className="border mt-2" style={{ background: "#050B18", borderColor: "#EF4444" }}>
               <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
               <AlertTitle style={{ color: "#EF4444" }}>Something went wrong</AlertTitle>
               <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
@@ -467,6 +523,15 @@ export default function FaucetPage() {
             </Alert>
           )}
         </div>
+
+        {/* Faucet Balance - Above Claim Button */}
+        {faucetBalance !== undefined && (
+          <div className="mb-1 text-left">
+            <p className="text-xs" style={{ color: "#6B7280" }}>
+              Available: {Number(faucetBalance) / 1_000_000} USDC (testnet)
+            </p>
+          </div>
+        )}
 
         {/* Claim Button & Twitter Share */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -479,7 +544,7 @@ export default function FaucetPage() {
               color: "#F9FAFB",
             }}
           >
-            {faucetStatus === "loading" || isPending || isConfirming ? (
+            {(faucetStatus === "loading" || isClaiming) ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 Claiming...
@@ -615,7 +680,11 @@ export default function FaucetPage() {
             </li>
             <li className="flex items-start">
               <span className="mr-2">•</span>
-              <span>You can request only once every 24 hours from this device.</span>
+              <span>You can request only once every 24 hours per destination address.</span>
+            </li>
+            <li className="flex items-start">
+              <span className="mr-2">•</span>
+              <span>Maximum amount: 100 USDC (testnet) per claim.</span>
             </li>
           </ul>
         </div>
@@ -636,22 +705,24 @@ export default function FaucetPage() {
             </svg>
           </a>
           <a
-            href="https://x.com/yourusername"
+            href="https://x.com/BRUNOAMUNIZ"
             target="_blank"
             rel="noopener noreferrer"
             className="transition-colors hover:opacity-80"
             style={{ color: "#9CA3AF" }}
+            aria-label="Follow on X (Twitter)"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
           </a>
           <a
-            href="https://linkedin.com/in/yourprofile"
+            href="https://www.linkedin.com/in/brunoamuniz/"
             target="_blank"
             rel="noopener noreferrer"
             className="transition-colors hover:opacity-80"
             style={{ color: "#9CA3AF" }}
+            aria-label="Connect on LinkedIn"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />

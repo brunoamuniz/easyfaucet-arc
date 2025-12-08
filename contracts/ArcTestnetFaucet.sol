@@ -9,7 +9,8 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /**
  * @title ArcTestnetFaucet
  * @notice ERC-20 token faucet for ARC Testnet
- * @dev Allows users to claim 100 USDC (testnet) once every 24 hours
+ * @dev Allows users to claim 100 USDC (testnet) once every 24 hours via gasless claims
+ * @dev Only owner can execute claims through claimFor function
  */
 contract ArcTestnetFaucet is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -57,17 +58,21 @@ contract ArcTestnetFaucet is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Claim tokens from the faucet
-     * @dev Can only be called once per address every cooldown period
+     * @notice Owner can claim tokens for a recipient address (gasless claims)
+     * @dev Only owner can call this function. Used for backend-controlled gasless claims.
+     * @param recipient The address that will receive the faucet USDC
      */
-    function claim() external nonReentrant {
+    function claimFor(address recipient) external onlyOwner nonReentrant {
         // Check if paused
         if (paused) {
             revert Paused();
         }
 
-        // Check cooldown
-        uint256 lastClaim = lastClaimAt[msg.sender];
+        // Validate recipient
+        require(recipient != address(0), "Recipient cannot be zero address");
+
+        // Check cooldown per recipient
+        uint256 lastClaim = lastClaimAt[recipient];
         if (lastClaim > 0) {
             uint256 nextClaimTime = lastClaim + cooldown;
             if (block.timestamp < nextClaimTime) {
@@ -85,14 +90,14 @@ contract ArcTestnetFaucet is Ownable, ReentrancyGuard {
             revert InsufficientFaucetBalance(balance, claimAmount);
         }
 
-        // Update state (Effects)
-        lastClaimAt[msg.sender] = block.timestamp;
+        // Update state (Effects) - cooldown is per recipient
+        lastClaimAt[recipient] = block.timestamp;
 
-        // Transfer tokens (Interactions)
-        token.safeTransfer(msg.sender, claimAmount);
+        // Transfer tokens to recipient (Interactions)
+        token.safeTransfer(recipient, claimAmount);
 
-        // Emit event
-        emit Claimed(msg.sender, claimAmount, block.timestamp);
+        // Emit event with recipient
+        emit Claimed(recipient, claimAmount, block.timestamp);
     }
 
     /**

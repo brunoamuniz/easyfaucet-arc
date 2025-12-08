@@ -48,9 +48,8 @@ broadcast/
 out/
 lib/openzeppelin-contracts/
 
-# Sensitive deployment files (keep examples)
-scripts/fund-faucet.sh
-scripts/deploy-faucet.sh
+# Sensitive deployment files
+/scripts
 
 # Vercel
 .vercel
@@ -122,3 +121,4 @@ temp/
 *.njsproj
 *.sln
 *.sw?
+.env.local
