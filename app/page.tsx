@@ -412,7 +412,7 @@ export default function FaucetPage() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: "#020617" }}>
       <Card className="w-full max-w-[560px] p-8 shadow-2xl" style={{ background: "#050B18", borderColor: "#1E293B" }}>
         {/* Header */}
-        <div className="text-center space-y-4 mb-8">
+        <div className="text-center space-y-4 mb-6">
           <div
             className="inline-block px-3 py-1 rounded-full text-xs font-medium"
             style={{ background: "linear-gradient(90deg, #2F2CFF, #C035FF)", color: "#F9FAFB" }}
@@ -573,17 +573,8 @@ export default function FaucetPage() {
 
         </div>
 
-        {/* Faucet Balance - Above Claim Button */}
-        {faucetBalance !== undefined && (
-          <div className="mb-1 text-left">
-            <p className="text-xs" style={{ color: "#6B7280" }}>
-              Available: {Number(faucetBalance) / 1_000_000} USDC (testnet)
-            </p>
-          </div>
-        )}
-
         {/* Claim Button & Twitter Share */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row gap-3 mb-2">
           <Button
             onClick={handleClaim}
             disabled={isClaimDisabled}
@@ -628,11 +619,20 @@ export default function FaucetPage() {
           </a>
         </div>
 
+        {/* Faucet Balance - Below Claim Button */}
+        {faucetBalance !== undefined && (
+          <div className="mb-2 text-left">
+            <p className="text-xs" style={{ color: "#6B7280" }}>
+              Available: {Number(faucetBalance) / 1_000_000} USDC (testnet)
+            </p>
+          </div>
+        )}
+
         {/* Tutorial Toggle Button */}
         <button
           onClick={() => setIsTutorialExpanded(!isTutorialExpanded)}
           aria-expanded={isTutorialExpanded}
-          className="w-full mb-4 text-xs text-center transition-colors hover:opacity-80 flex items-center justify-center gap-2"
+          className="w-full mb-2 text-xs text-center transition-colors hover:opacity-80 flex items-center justify-center gap-2"
           style={{ color: "#9CA3AF" }}
         >
           <span>Do you need more faucets? You should follow this tutorial</span>
@@ -644,7 +644,7 @@ export default function FaucetPage() {
         {/* Tutorial Content */}
         <div
           className={`overflow-hidden transition-all duration-300 ease-in-out ${
-            isTutorialExpanded ? "max-h-96 opacity-100 mb-6" : "max-h-0 opacity-0 mb-0"
+            isTutorialExpanded ? "max-h-96 opacity-100 mb-3" : "max-h-0 opacity-0 mb-0"
           }`}
         >
           <div
@@ -703,7 +703,7 @@ export default function FaucetPage() {
 
         {/* Total Claims Counter - Social Proof */}
         {totalClaims !== undefined && (
-          <div className="mb-4 text-center">
+          <div className="mb-2 text-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg" style={{ background: "#1E293B" }}>
               <Info className="h-4 w-4" style={{ color: "#9CA3AF" }} />
               <span className="text-sm font-medium" style={{ color: "#F9FAFB" }}>
