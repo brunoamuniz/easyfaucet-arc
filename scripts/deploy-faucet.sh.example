@@ -1,0 +1,42 @@
+#!/bin/bash
+# Deploy ArcTestnetFaucet to ARC Testnet
+#
+# Usage:
+#   1. Copy this file: cp scripts/deploy-faucet.sh.example scripts/deploy-faucet.sh
+#   2. Add your private key to scripts/deploy-faucet.sh or set PRIVATE_KEY env var
+#   3. Run: ./scripts/deploy-faucet.sh
+#
+# Or create a .env file with:
+#   PRIVATE_KEY=0x...
+
+USDC_TOKEN="0x3600000000000000000000000000000000000000"
+CLAIM_AMOUNT="100000000"  # 100 USDC (6 decimals)
+COOLDOWN="86400"           # 24 hours in seconds
+RPC_URL="https://rpc.testnet.arc.network"
+
+# Load private key from environment or .env file
+if [ -f .env ]; then
+  export $(cat .env | grep -v '^#' | xargs)
+fi
+
+if [ -z "$PRIVATE_KEY" ]; then
+  echo "❌ Error: PRIVATE_KEY not set"
+  echo "Please set PRIVATE_KEY environment variable or create a .env file"
+  exit 1
+fi
+
+echo "🚀 Deploying ArcTestnetFaucet..."
+echo "USDC Token: $USDC_TOKEN"
+echo "Claim Amount: $CLAIM_AMOUNT (100 USDC)"
+echo "Cooldown: $COOLDOWN seconds (24h)"
+echo ""
+
+forge create contracts/ArcTestnetFaucet.sol:ArcTestnetFaucet \
+  --rpc-url "$RPC_URL" \
+  --private-key "$PRIVATE_KEY" \
+  --constructor-args "$USDC_TOKEN" "$CLAIM_AMOUNT" "$COOLDOWN" \
+  --broadcast
+
+echo ""
+echo "✅ Deployment complete!"
+

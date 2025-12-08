@@ -1,373 +1,437 @@
 /**
  * ABI for ArcTestnetFaucet contract
  * 
- * This ABI should be updated after compiling the contract.
- * You can extract it from the compilation artifacts.
+ * Auto-generated from compiled contract artifacts.
+ * Updated: 2025-12-08 11:32:39
  */
 
 export const ARCTESTNET_FAUCET_ABI = [
   {
-    inputs: [],
-    name: "CooldownActive",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "FaucetEmpty",
-    type: "error",
-  },
-  {
-    inputs: [
+    "type": "constructor",
+    "inputs": [
       {
-        internalType: "uint256",
-        name: "currentBalance",
-        type: "uint256",
+        "name": "_token",
+        "type": "address",
+        "internalType": "address"
       },
       {
-        internalType: "uint256",
-        name: "requiredAmount",
-        type: "uint256",
+        "name": "_claimAmount",
+        "type": "uint256",
+        "internalType": "uint256"
       },
+      {
+        "name": "_cooldown",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: "InsufficientFaucetBalance",
-    type: "error",
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [],
-    name: "Paused",
-    type: "error",
-  },
-  {
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "canClaim",
+    "inputs": [
       {
-        indexed: true,
-        internalType: "address",
-        name: "user",
-        type: "address",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "amount",
-        type: "uint256",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "timestamp",
-        type: "uint256",
-      },
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    name: "Claimed",
-    type: "event",
+    "outputs": [
+      {
+        "name": "allowed",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "remainingSeconds",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "oldAmount",
-        type: "uint256",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "newAmount",
-        type: "uint256",
-      },
-    ],
-    name: "ClaimAmountUpdated",
-    type: "event",
+    "type": "function",
+    "name": "claim",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "claimAmount",
+    "inputs": [],
+    "outputs": [
       {
-        indexed: false,
-        internalType: "uint256",
-        name: "oldCooldown",
-        type: "uint256",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "newCooldown",
-        type: "uint256",
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: "CooldownUpdated",
-    type: "event",
+    "stateMutability": "view"
   },
   {
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "cooldown",
+    "inputs": [],
+    "outputs": [
       {
-        indexed: true,
-        internalType: "address",
-        name: "previousOwner",
-        type: "address",
-      },
-      {
-        indexed: true,
-        internalType: "address",
-        name: "newOwner",
-        type: "address",
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: "OwnershipTransferred",
-    type: "event",
+    "stateMutability": "view"
   },
   {
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "faucetBalance",
+    "inputs": [],
+    "outputs": [
       {
-        indexed: false,
-        internalType: "bool",
-        name: "paused",
-        type: "bool",
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: "PausedUpdated",
-    type: "event",
+    "stateMutability": "view"
   },
   {
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "lastClaimAt",
+    "inputs": [
       {
-        indexed: false,
-        internalType: "address",
-        name: "oldToken",
-        type: "address",
-      },
-      {
-        indexed: false,
-        internalType: "address",
-        name: "newToken",
-        type: "address",
-      },
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    name: "TokenUpdated",
-    type: "event",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
-    inputs: [],
-    name: "claim",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
-    inputs: [
+    "type": "function",
+    "name": "paused",
+    "inputs": [],
+    "outputs": [
       {
-        internalType: "address",
-        name: "user",
-        type: "address",
-      },
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
     ],
-    name: "canClaim",
-    outputs: [
-      {
-        internalType: "bool",
-        name: "allowed",
-        type: "bool",
-      },
-      {
-        internalType: "uint256",
-        name: "remainingSeconds",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
+    "stateMutability": "view"
   },
   {
-    inputs: [],
-    name: "claimAmount",
-    outputs: [
-      {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [],
-    name: "cooldown",
-    outputs: [
+    "type": "function",
+    "name": "setClaimAmount",
+    "inputs": [
       {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
+        "name": "newAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    stateMutability: "view",
-    type: "function",
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [],
-    name: "faucetBalance",
-    outputs: [
+    "type": "function",
+    "name": "setCooldown",
+    "inputs": [
       {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
+        "name": "newCooldown",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    stateMutability: "view",
-    type: "function",
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [
+    "type": "function",
+    "name": "setPaused",
+    "inputs": [
       {
-        internalType: "address",
-        name: "",
-        type: "address",
-      },
+        "name": "_paused",
+        "type": "bool",
+        "internalType": "bool"
+      }
     ],
-    name: "lastClaimAt",
-    outputs: [
-      {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [],
-    name: "owner",
-    outputs: [
+    "type": "function",
+    "name": "setToken",
+    "inputs": [
       {
-        internalType: "address",
-        name: "",
-        type: "address",
-      },
+        "name": "newToken",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    stateMutability: "view",
-    type: "function",
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [],
-    name: "paused",
-    outputs: [
+    "type": "function",
+    "name": "token",
+    "inputs": [],
+    "outputs": [
       {
-        internalType: "bool",
-        name: "",
-        type: "bool",
-      },
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
+      }
     ],
-    stateMutability: "view",
-    type: "function",
+    "stateMutability": "view"
   },
   {
-    inputs: [],
-    name: "renounceOwnership",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [
+    "type": "function",
+    "name": "withdrawTokens",
+    "inputs": [
       {
-        internalType: "uint256",
-        name: "newAmount",
-        type: "uint256",
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
       },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: "setClaimAmount",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [
+    "type": "event",
+    "name": "ClaimAmountUpdated",
+    "inputs": [
       {
-        internalType: "uint256",
-        name: "newCooldown",
-        type: "uint256",
+        "name": "oldAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       },
+      {
+        "name": "newAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
     ],
-    name: "setCooldown",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
+    "anonymous": false
   },
   {
-    inputs: [
+    "type": "event",
+    "name": "Claimed",
+    "inputs": [
       {
-        internalType: "bool",
-        name: "_paused",
-        type: "bool",
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
     ],
-    name: "setPaused",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
+    "anonymous": false
   },
   {
-    inputs: [
+    "type": "event",
+    "name": "CooldownUpdated",
+    "inputs": [
       {
-        internalType: "address",
-        name: "newToken",
-        type: "address",
+        "name": "oldCooldown",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       },
+      {
+        "name": "newCooldown",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
     ],
-    name: "setToken",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
+    "anonymous": false
   },
   {
-    inputs: [
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
       {
-        internalType: "address",
-        name: "newOwner",
-        type: "address",
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
     ],
-    name: "transferOwnership",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
+    "anonymous": false
   },
   {
-    inputs: [],
-    name: "token",
-    outputs: [
+    "type": "event",
+    "name": "PausedUpdated",
+    "inputs": [
       {
-        internalType: "contract IERC20",
-        name: "",
-        type: "address",
-      },
+        "name": "paused",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
     ],
-    stateMutability: "view",
-    type: "function",
+    "anonymous": false
   },
   {
-    inputs: [
+    "type": "event",
+    "name": "TokenUpdated",
+    "inputs": [
       {
-        internalType: "address",
-        name: "to",
-        type: "address",
+        "name": "oldToken",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       },
       {
-        internalType: "uint256",
-        name: "amount",
-        type: "uint256",
-      },
+        "name": "newToken",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
     ],
-    name: "withdrawTokens",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
+    "anonymous": false
   },
+  {
+    "type": "error",
+    "name": "CooldownActive",
+    "inputs": [
+      {
+        "name": "remainingSeconds",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "FaucetEmpty",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientFaucetBalance",
+    "inputs": [
+      {
+        "name": "currentBalance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "requiredAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "Paused",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SafeERC20FailedOperation",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  }
 ] as const;
-

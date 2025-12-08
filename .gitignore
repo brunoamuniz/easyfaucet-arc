@@ -42,6 +42,16 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 
+# Foundry/Forge
+cache/
+broadcast/
+out/
+lib/openzeppelin-contracts/
+
+# Sensitive deployment files (keep examples)
+scripts/fund-faucet.sh
+scripts/deploy-faucet.sh
+
 # Vercel
 .vercel
 

@@ -1,0 +1,83 @@
+#!/bin/bash
+# Script to fund the faucet contract with USDC
+# 
+# Usage:
+#   1. Copy this file: cp scripts/fund-faucet.sh.example scripts/fund-faucet.sh
+#   2. Add your private key to scripts/fund-faucet.sh or set PRIVATE_KEY env var
+#   3. Run: ./scripts/fund-faucet.sh [amount]
+#
+# Or create a .env file with:
+#   PRIVATE_KEY=0x...
+
+# Configuration
+USDC_TOKEN="0x3600000000000000000000000000000000000000"
+FAUCET_CONTRACT="0xD7bD62c4B93873E18Cb5E82709ceA18902ac82BF"
+RPC_URL="https://rpc.testnet.arc.network"
+
+# Load private key from environment or .env file
+if [ -f .env ]; then
+  export $(cat .env | grep -v '^#' | xargs)
+fi
+
+if [ -z "$PRIVATE_KEY" ]; then
+  echo "❌ Error: PRIVATE_KEY not set"
+  echo "Please set PRIVATE_KEY environment variable or create a .env file"
+  exit 1
+fi
+
+# Amount to transfer (in USDC, will be converted to 6 decimals)
+# Default: 1000 USDC
+AMOUNT_USDC=${1:-1000}
+AMOUNT_WEI=$((AMOUNT_USDC * 1000000))  # 6 decimals
+
+echo "💰 Funding Faucet Contract"
+echo "=========================="
+echo "Contract: $FAUCET_CONTRACT"
+echo "Amount: $AMOUNT_USDC USDC ($AMOUNT_WEI with 6 decimals)"
+echo ""
+
+# Check wallet balance first
+echo "Checking wallet balance..."
+WALLET_ADDRESS="0x..." # Replace with your wallet address
+WALLET_BALANCE_RAW=$(cast call $USDC_TOKEN "balanceOf(address)(uint256)" $WALLET_ADDRESS --rpc-url $RPC_URL 2>/dev/null | grep -oE '[0-9]+' | head -1 || echo "0")
+
+if [ "$WALLET_BALANCE_RAW" = "0" ] || [ -z "$WALLET_BALANCE_RAW" ]; then
+  echo "❌ Error: Could not check wallet balance or wallet has 0 USDC"
+  echo "Please check your wallet has USDC tokens"
+  exit 1
+fi
+
+WALLET_BALANCE_USDC=$((WALLET_BALANCE_RAW / 1000000))
+echo "Wallet balance: $WALLET_BALANCE_USDC USDC"
+echo ""
+
+if [ "$AMOUNT_WEI" -gt "$WALLET_BALANCE_RAW" ]; then
+  echo "❌ Error: Insufficient balance"
+  echo "You have $WALLET_BALANCE_USDC USDC but trying to transfer $AMOUNT_USDC USDC"
+  exit 1
+fi
+
+# Transfer USDC to contract
+echo "Transferring $AMOUNT_USDC USDC to faucet contract..."
+cast send $USDC_TOKEN "transfer(address,uint256)" $FAUCET_CONTRACT $AMOUNT_WEI \
+  --rpc-url $RPC_URL \
+  --private-key $PRIVATE_KEY \
+  --legacy
+
+if [ $? -eq 0 ]; then
+  echo ""
+  echo "✅ Transfer successful!"
+  echo ""
+  echo "Verifying contract balance..."
+  sleep 3
+  CONTRACT_BALANCE_RAW=$(cast call $FAUCET_CONTRACT "faucetBalance()(uint256)" --rpc-url $RPC_URL 2>/dev/null | grep -oE '[0-9]+' | head -1 || echo "0")
+  CONTRACT_BALANCE_USDC=$((CONTRACT_BALANCE_RAW / 1000000))
+  echo "Contract balance: $CONTRACT_BALANCE_USDC USDC"
+  echo ""
+  echo "🎉 Faucet is now funded and ready to use!"
+else
+  echo ""
+  echo "❌ Transfer failed. Please check the error above."
+  exit 1
+fi
+

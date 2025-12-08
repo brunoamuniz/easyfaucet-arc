@@ -1,16 +1,19 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useAccount, useChainId, useSwitchChain, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useChainId, useSwitchChain, useReadContract, useWriteContract, useWaitForTransactionReceipt, useReconnect } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, CheckCircle2, AlertCircle, Info } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Info, ChevronDown, ExternalLink } from "lucide-react";
 import { FAUCET_CONTRACT_ADDRESS, ARC_TESTNET_CHAIN_ID } from "@/lib/config/faucet";
 import { ARCTESTNET_FAUCET_ABI } from "@/lib/contracts/ArcTestnetFaucet.abi";
 import { decodeFaucetError, formatRemainingTime } from "@/lib/utils/errorDecoder";
 import { arcTestnet } from "@/lib/config/chains";
+
+// TODO: replace with real deployed URL
+const APP_URL = "https://your-app-url.example";
 
 type FaucetStatus =
   | "idle"
@@ -86,11 +89,15 @@ export default function FaucetPage() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
+  
+  // Auto-reconnect on mount
+  useReconnect();
 
   const [faucetStatus, setFaucetStatus] = useState<FaucetStatus>("idle");
   const [txHash, setTxHash] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [remainingCooldownSeconds, setRemainingCooldownSeconds] = useState<number>(0);
+  const [isTutorialExpanded, setIsTutorialExpanded] = useState<boolean>(false);
 
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== ARC_TESTNET_CHAIN_ID;
@@ -145,6 +152,11 @@ export default function FaucetPage() {
 
   // Update status based on wallet, network, and contract state
   useEffect(() => {
+    // Don't override success status - let user see the success message
+    if (faucetStatus === "success") {
+      return;
+    }
+
     if (!isConnected || !address) {
       setFaucetStatus("no_wallet");
       return;
@@ -163,18 +175,33 @@ export default function FaucetPage() {
     // Check contract cooldown (source of truth)
     if (canClaimResult) {
       if (!canClaimResult.allowed && canClaimResult.remainingSeconds > 0) {
+        // Contract has active cooldown - use it
         setFaucetStatus("cooldown");
         setRemainingCooldownSeconds(canClaimResult.remainingSeconds);
         return;
+      } else if (canClaimResult.allowed) {
+        // Contract says we can claim - clear any stale local cooldown
+        if (typeof window !== "undefined" && address) {
+          const deviceId = getDeviceId();
+          localStorage.removeItem(`arc-faucet:lastClaim:${address.toLowerCase()}`);
+          localStorage.removeItem(`arc-faucet:lastClaimDevice:${deviceId}`);
+        }
+        // Don't check local cooldown if contract allows claim
+      } else if (!canClaimResult.allowed && canClaimResult.remainingSeconds === 0) {
+        // Contract says can't claim but no cooldown - might be empty faucet or other issue
+        // Don't set cooldown status, let other checks handle it
       }
     }
 
-    // Check local cooldown (extra layer)
-    const localCooldown = checkLocalCooldown(address);
-    if (localCooldown.isInCooldown) {
-      setFaucetStatus("cooldown");
-      setRemainingCooldownSeconds(Math.floor(localCooldown.remainingTime / 1000));
-      return;
+    // Check local cooldown only if contract doesn't have data yet
+    // Once contract responds, it becomes the source of truth
+    if (!canClaimResult) {
+      const localCooldown = checkLocalCooldown(address);
+      if (localCooldown.isInCooldown) {
+        setFaucetStatus("cooldown");
+        setRemainingCooldownSeconds(Math.floor(localCooldown.remainingTime / 1000));
+        return;
+      }
     }
 
     // Check faucet balance
@@ -184,7 +211,7 @@ export default function FaucetPage() {
     }
 
     setFaucetStatus("idle");
-  }, [isConnected, address, isWrongNetwork, paused, canClaimResult, faucetBalance]);
+  }, [isConnected, address, isWrongNetwork, paused, canClaimResult, faucetBalance, faucetStatus]);
 
   // Handle transaction states
   useEffect(() => {
@@ -192,6 +219,7 @@ export default function FaucetPage() {
       setFaucetStatus("loading");
       setTxHash("");
       setErrorMessage("");
+      // Clear success status when starting a new claim
     }
   }, [isPending]);
 
@@ -253,6 +281,9 @@ export default function FaucetPage() {
     if (!address || isWrongNetwork) return;
 
     try {
+      // Clear previous success/error messages when starting a new claim
+      setFaucetStatus("loading");
+      setErrorMessage("");
       writeContract({
         address: FAUCET_CONTRACT_ADDRESS,
         abi: ARCTESTNET_FAUCET_ABI,
@@ -279,9 +310,13 @@ export default function FaucetPage() {
     faucetStatus === "cooldown" ||
     faucetStatus === "paused" ||
     paused === true ||
-    (canClaimResult && !canClaimResult.allowed);
+    (canClaimResult !== null && canClaimResult !== undefined && !canClaimResult.allowed);
 
   const explorerUrl = `${arcTestnet.blockExplorers?.default.url}/tx/${txHash}`;
+
+  // Twitter share URL
+  const tweetText = `I'm claiming 100 USDC on ARC testnet using Easy Faucet Arc Testnet to power my dApp testing. Try it here: ${APP_URL}`;
+  const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: "#020617" }}>
@@ -306,7 +341,7 @@ export default function FaucetPage() {
         {/* Wallet Connection - Centralized and Styled */}
         <div className="mb-6 flex items-center justify-center w-full">
           <div className="w-full max-w-[400px] flex justify-center">
-            <ConnectButton />
+            <ConnectButton showBalance={false} />
           </div>
         </div>
 
@@ -351,24 +386,39 @@ export default function FaucetPage() {
 
           {faucetStatus === "success" && (
             <Alert className="border" style={{ background: "#050B18", borderColor: "#22C55E" }}>
-              <CheckCircle2 className="h-4 w-4" style={{ color: "#22C55E" }} />
-              <AlertTitle style={{ color: "#22C55E" }}>Faucet requested!</AlertTitle>
-              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
-                Up to 100 USDC (testnet) has been sent to your ARC address. It may take a few moments to appear.
+              <CheckCircle2 className="h-5 w-5" style={{ color: "#22C55E" }} />
+              <AlertTitle style={{ color: "#22C55E", fontSize: "18px", fontWeight: "600" }}>
+                ✅ Claim Successful!
+              </AlertTitle>
+              <AlertDescription style={{ color: "#E5E7EB" }} className="mt-3 space-y-2">
+                <p className="text-base">
+                  <strong>100 USDC (testnet)</strong> has been sent to your wallet address.
+                </p>
+                <p className="text-sm" style={{ color: "#9CA3AF" }}>
+                  It may take a few moments to appear in your wallet.
+                </p>
+                {txHash && (
+                  <div className="mt-4 pt-3 border-t" style={{ borderColor: "#1F2937" }}>
+                    <a
+                      href={explorerUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:opacity-80"
+                      style={{ 
+                        background: "linear-gradient(90deg, #2F2CFF, #C035FF)",
+                        color: "#FFFFFF",
+                        textDecoration: "none"
+                      }}
+                    >
+                      <span>View Transaction</span>
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                    <p className="mt-2 text-xs font-mono" style={{ color: "#6B7280" }}>
+                      {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                    </p>
+                  </div>
+                )}
               </AlertDescription>
-              {txHash && (
-                <div className="mt-2">
-                  <a
-                    href={explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-mono break-all hover:underline"
-                    style={{ color: "#2F2CFF" }}
-                  >
-                    View on Explorer: {txHash.slice(0, 10)}...{txHash.slice(-8)}
-                  </a>
-                </div>
-              )}
             </Alert>
           )}
 
@@ -408,25 +458,124 @@ export default function FaucetPage() {
           )}
         </div>
 
-        {/* Claim Button */}
-        <Button
-          onClick={handleClaim}
-          disabled={isClaimDisabled}
-          className="w-full font-medium text-base h-14 mb-6 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{
-            background: isClaimDisabled ? "#1E293B" : "linear-gradient(90deg, #2F2CFF, #C035FF)",
-            color: "#F9FAFB",
-          }}
+        {/* Claim Button & Twitter Share */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <Button
+            onClick={handleClaim}
+            disabled={isClaimDisabled}
+            className="flex-1 font-medium text-base h-14 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: isClaimDisabled ? "#1E293B" : "linear-gradient(90deg, #2F2CFF, #C035FF)",
+              color: "#F9FAFB",
+            }}
+          >
+            {faucetStatus === "loading" || isPending || isConfirming ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Claiming...
+              </>
+            ) : (
+              "Claim 100 USDC (testnet)"
+            )}
+          </Button>
+
+          <a
+            href={twitterShareUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Share on Twitter"
+            className="inline-flex items-center justify-center gap-2 px-4 h-14 font-medium text-sm rounded-md border transition-colors hover:opacity-90"
+            style={{
+              background: "#050B18",
+              borderColor: "#1E293B",
+              color: "#F9FAFB",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#1E293B";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#050B18";
+            }}
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+            <span>Share</span>
+          </a>
+        </div>
+
+        {/* Tutorial Toggle Button */}
+        <button
+          onClick={() => setIsTutorialExpanded(!isTutorialExpanded)}
+          aria-expanded={isTutorialExpanded}
+          className="w-full mb-4 text-xs text-center transition-colors hover:opacity-80 flex items-center justify-center gap-2"
+          style={{ color: "#9CA3AF" }}
         >
-          {faucetStatus === "loading" || isPending || isConfirming ? (
-            <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              Claiming...
-            </>
-          ) : (
-            "Claim 100 USDC (testnet)"
-          )}
-        </Button>
+          <span>Do you need more faucets? You should follow this tutorial</span>
+          <ChevronDown
+            className={`w-4 h-4 transition-transform duration-300 ${isTutorialExpanded ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {/* Tutorial Content */}
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            isTutorialExpanded ? "max-h-96 opacity-100 mb-6" : "max-h-0 opacity-0 mb-0"
+          }`}
+        >
+          <div
+            className="p-4 rounded-lg border space-y-3"
+            style={{ background: "#050B18", borderColor: "#1E293B" }}
+          >
+            <ol className="space-y-3 text-sm" style={{ color: "#F9FAFB" }}>
+              <li className="flex flex-col gap-1">
+                <span className="font-medium">
+                  1) <span style={{ color: "#9CA3AF" }}>Get assets on Sepolia:</span>
+                </span>
+                <a
+                  href="https://sepolia-faucet.pk910.de/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs break-all hover:underline transition-colors"
+                  style={{ color: "#2F2CFF" }}
+                >
+                  https://sepolia-faucet.pk910.de/
+                </a>
+              </li>
+              <li className="flex flex-col gap-1">
+                <span className="font-medium">
+                  2) <span style={{ color: "#9CA3AF" }}>Swap the assets using Uniswap (Sepolia):</span>
+                </span>
+                <a
+                  href="https://app.uniswap.org/swap?chain=sepolia&inputCurrency=NATIVE&outputCurrency=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238&value=2.4&field=input"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs break-all hover:underline transition-colors"
+                  style={{ color: "#2F2CFF" }}
+                >
+                  https://app.uniswap.org/swap?chain=sepolia&inputCurrency=NATIVE&outputCurrency=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238&value=2.4&field=input
+                </a>
+              </li>
+              <li className="flex flex-col gap-1">
+                <span className="font-medium">
+                  3) <span style={{ color: "#9CA3AF" }}>Bridge using Superbridge:</span>
+                </span>
+                <a
+                  href="https://superbridge.app/?fromChainId=11155111&toChainId=5042002"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs break-all hover:underline transition-colors"
+                  style={{ color: "#2F2CFF" }}
+                >
+                  https://superbridge.app/?fromChainId=11155111&toChainId=5042002
+                </a>
+              </li>
+            </ol>
+            <p className="text-xs mt-4 pt-3 border-t" style={{ color: "#9CA3AF", borderColor: "#1E293B" }}>
+              This process can take up to one hour to complete.
+            </p>
+          </div>
+        </div>
 
         {/* Info Box */}
         <div className="space-y-2 p-4 rounded-lg" style={{ background: "#1E293B" }}>
@@ -456,6 +605,18 @@ export default function FaucetPage() {
 
       <footer className="w-full max-w-[560px] mt-8 text-center space-y-4">
         <div className="flex items-center justify-center gap-6">
+          <a
+            href="https://github.com/brunoamuniz/easyfaucet-arc"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:opacity-80"
+            style={{ color: "#9CA3AF" }}
+            aria-label="GitHub Repository"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+            </svg>
+          </a>
           <a
             href="https://x.com/yourusername"
             target="_blank"
