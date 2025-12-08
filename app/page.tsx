@@ -769,7 +769,7 @@ export default function FaucetPage() {
             </svg>
           </a>
           <a
-            href="https://x.com/BRUNOAMUNIZ"
+            href="https://x.com/0xbrunoamuniz"
             target="_blank"
             rel="noopener noreferrer"
             className="transition-colors hover:opacity-80"
