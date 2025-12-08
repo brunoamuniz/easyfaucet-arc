@@ -1,6 +1,45 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* Customize RainbowKit ConnectButton - Centralized */
+div[data-testid="rk-connect-button"] {
+  width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+button[data-testid="rk-connect-button"],
+div[data-testid="rk-connect-button"] > button {
+  width: 100% !important;
+  max-width: 400px !important;
+  min-width: 200px !important;
+  height: 48px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  background: linear-gradient(90deg, #2F2CFF, #C035FF) !important;
+  color: #F9FAFB !important;
+  border: none !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 auto !important;
+}
+
+button[data-testid="rk-connect-button"]:hover,
+div[data-testid="rk-connect-button"] > button:hover {
+  opacity: 0.9 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(47, 44, 255, 0.4) !important;
+}
+
+button[data-testid="rk-connect-button"]:active,
+div[data-testid="rk-connect-button"] > button:active {
+  transform: translateY(0) !important;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
