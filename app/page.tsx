@@ -466,7 +466,7 @@ export default function FaucetPage() {
         </div>
 
         {/* Wallet Connection - Centralized and Styled */}
-        <div className="1 flex items-center justify-center w-full mb-2">
+        <div className="flex items-center justify-center w-full mb-2">
           <div className="w-full max-w-[800px] flex justify-center">
             <ConnectButton showBalance={false} />
           </div>

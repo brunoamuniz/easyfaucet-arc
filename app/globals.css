@@ -13,7 +13,7 @@ button[data-testid="rk-connect-button"],
 div[data-testid="rk-connect-button"] > button {
   width: 100% !important;
   max-width: 800px !important;
-  min-width: 400px !important;
+  min-width: 0 !important;
   height: 48px !important;
   font-size: 16px !important;
   font-weight: 600 !important;
@@ -26,6 +26,23 @@ div[data-testid="rk-connect-button"] > button {
   align-items: center !important;
   justify-content: center !important;
   margin: 0 auto !important;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 640px) {
+  button[data-testid="rk-connect-button"],
+  div[data-testid="rk-connect-button"] > button {
+    max-width: 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 14px !important;
+    padding: 0 16px !important;
+  }
+  
+  div[data-testid="rk-connect-button"] {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 }
 
 button[data-testid="rk-connect-button"]:hover,
