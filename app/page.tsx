@@ -6,11 +6,12 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, CheckCircle2, AlertCircle, Info, ChevronDown, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isAddress } from "viem";
-import { FAUCET_CONTRACT_ADDRESS, ARC_TESTNET_CHAIN_ID } from "@/lib/config/faucet";
+import { FAUCET_CONTRACT_ADDRESS, ARC_TESTNET_CHAIN_ID, USDC_FAUCET_ADDRESS, EURC_FAUCET_ADDRESS } from "@/lib/config/faucet";
 import { ARCTESTNET_FAUCET_ABI } from "@/lib/contracts/ArcTestnetFaucet.abi";
 import { decodeFaucetError, formatRemainingTime } from "@/lib/utils/errorDecoder";
 import { arcTestnet } from "@/lib/config/chains";
@@ -102,6 +103,8 @@ export default function FaucetPage() {
   const [addressValidationError, setAddressValidationError] = useState<string>("");
   const [isClaiming, setIsClaiming] = useState<boolean>(false);
   const [errorTimestamp, setErrorTimestamp] = useState<number>(0);
+  const [selectedToken, setSelectedToken] = useState<"USDC" | "EURC">("USDC");
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState<boolean>(false);
 
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== ARC_TESTNET_CHAIN_ID;
@@ -124,6 +127,16 @@ export default function FaucetPage() {
     }
   }, [isConnected, address, destinationAddress]);
 
+  // Clear success status when destination address or wallet changes
+  useEffect(() => {
+    if (faucetStatus === "success") {
+      // Clear success status when address changes
+      setFaucetStatus("idle");
+      setTxHash("");
+      setShowSuccessAnimation(false);
+    }
+  }, [destinationAddress, address]);
+
   // Validate address on change
   useEffect(() => {
     if (destinationAddress) {
@@ -141,6 +154,11 @@ export default function FaucetPage() {
     }
   }, [destinationAddress]);
 
+  // Get contract address based on selected token
+  const currentFaucetAddress = useMemo(() => {
+    return selectedToken === "USDC" ? USDC_FAUCET_ADDRESS : EURC_FAUCET_ADDRESS;
+  }, [selectedToken]);
+
   // Read contract state - use destinationAddress if available
   const recipientForCheck = (() => {
     if (destinationAddress && isValidDestinationAddress) {
@@ -154,7 +172,7 @@ export default function FaucetPage() {
   })();
   
   const { data: canClaimData, refetch: refetchCanClaim } = useReadContract({
-    address: FAUCET_CONTRACT_ADDRESS,
+    address: currentFaucetAddress,
     abi: ARCTESTNET_FAUCET_ABI,
     functionName: "canClaim",
     args: recipientForCheck ? [recipientForCheck as `0x${string}`] : undefined,
@@ -165,7 +183,7 @@ export default function FaucetPage() {
   });
 
   const { data: paused } = useReadContract({
-    address: FAUCET_CONTRACT_ADDRESS,
+    address: currentFaucetAddress,
     abi: ARCTESTNET_FAUCET_ABI,
     functionName: "paused",
     query: {
@@ -174,7 +192,7 @@ export default function FaucetPage() {
   });
 
   const { data: faucetBalance } = useReadContract({
-    address: FAUCET_CONTRACT_ADDRESS,
+    address: currentFaucetAddress,
     abi: ARCTESTNET_FAUCET_ABI,
     functionName: "faucetBalance",
     query: {
@@ -184,7 +202,7 @@ export default function FaucetPage() {
   });
 
   const { data: totalClaims, refetch: refetchTotalClaims } = useReadContract({
-    address: FAUCET_CONTRACT_ADDRESS,
+    address: currentFaucetAddress,
     abi: ARCTESTNET_FAUCET_ABI,
     functionName: "totalClaims",
     query: {
@@ -204,9 +222,19 @@ export default function FaucetPage() {
 
   // Update status based on wallet, network, and contract state
   useEffect(() => {
-    // Don't override success or loading status - let user see the messages
-    if (faucetStatus === "success" || faucetStatus === "loading") {
+    // Don't override loading status - let user see the loading message
+    if (faucetStatus === "loading") {
       return;
+    }
+
+    // Auto-clear success status after 10 seconds
+    if (faucetStatus === "success") {
+      const timeout = setTimeout(() => {
+        setFaucetStatus("idle");
+        setTxHash("");
+        setShowSuccessAnimation(false);
+      }, 10000);
+      return () => clearTimeout(timeout);
     }
 
     // For error status, allow override after 5 seconds to check if transaction actually succeeded
@@ -360,6 +388,12 @@ export default function FaucetPage() {
       setErrorTimestamp(0); // Clear any error timestamp
       setErrorMessage(""); // Clear any error message
       
+      // Trigger success animation
+      setShowSuccessAnimation(true);
+      setTimeout(() => {
+        setShowSuccessAnimation(false);
+      }, 2000);
+      
       // Store successful claim in localStorage
       if (recipientAddress) {
         storeSuccessfulClaim(recipientAddress);
@@ -401,18 +435,21 @@ export default function FaucetPage() {
   const explorerUrl = `${arcTestnet.blockExplorers?.default.url}/tx/${txHash}`;
 
   // Twitter share URL
-  const tweetText = `I'm claiming 100 USDC on ARC testnet using Easy Faucet Arc to power my dApp testing! 🚀
+  const tweetText = useMemo(() => 
+    `I'm claiming 100 ${selectedToken} on ARC testnet using Easy Faucet Arc to power my dApp testing! 🚀
 
 @ARC ${APP_URL}
 
-#ARC #DeFi #Web3 #ARCTestnet`;
+#ARC #DeFi #Web3 #ARCTestnet`,
+    [selectedToken]
+  );
   const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: "#020617" }}>
       <Card className="w-full max-w-[560px] p-8 shadow-2xl" style={{ background: "#050B18", borderColor: "#1E293B" }}>
         {/* Header */}
-        <div className="text-center space-y-4 mb-6">
+        <div className="text-center space-y-4 mb-4">
           <div
             className="inline-block px-3 py-1 rounded-full text-xs font-medium"
             style={{ background: "linear-gradient(90deg, #2F2CFF, #C035FF)", color: "#F9FAFB" }}
@@ -429,14 +466,14 @@ export default function FaucetPage() {
         </div>
 
         {/* Wallet Connection - Centralized and Styled */}
-        <div className="mb-4 flex items-center justify-center w-full">
-          <div className="w-full max-w-[400px] flex justify-center">
+        <div className="1 flex items-center justify-center w-full mb-2">
+          <div className="w-full max-w-[800px] flex justify-center">
             <ConnectButton showBalance={false} />
           </div>
         </div>
 
         {/* Info text about wallet connection */}
-        <div className="mb-4 text-center space-y-1">
+        <div className="text-center space-y-1">
           <p className="text-xs" style={{ color: "#6B7280" }}>
             Connect your wallet to auto-fill the address
           </p>
@@ -449,7 +486,7 @@ export default function FaucetPage() {
         </div>
 
         {/* Destination Address Input */}
-        <div className="mb-4 space-y-1">
+        <div className="space-y-1">
           <Label htmlFor="destination-address" className="text-sm" style={{ color: "#F9FAFB" }}>
             Destination address
           </Label>
@@ -477,16 +514,47 @@ export default function FaucetPage() {
             </p>
           )}
 
+          {/* Success Animation - Money Rain Effect */}
+          {showSuccessAnimation && (
+            <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+              {[...Array(30)].map((_, i) => {
+                const randomLeft = Math.random() * 100; // Random position across screen width (0-100%)
+                const randomDelay = Math.random() * 1.5; // Random delay (0-1.5s)
+                const randomDuration = 2 + Math.random() * 1.5; // Random duration (2-3.5s)
+                const randomDrift = (Math.random() - 0.5) * 100; // Random horizontal drift (-50px to +50px)
+                const randomSize = 1.5 + Math.random() * 1; // Random size (1.5-2.5rem)
+                const randomRotation = Math.random() * 360; // Random starting rotation
+                return (
+                  <div
+                    key={i}
+                    className="absolute text-4xl"
+                    style={{
+                      left: `${randomLeft}%`,
+                      top: '-10%',
+                      '--drift': `${randomDrift}px`,
+                      '--rotation': `${randomRotation}deg`,
+                      animation: `moneyRain ${randomDuration}s linear forwards`,
+                      animationDelay: `${randomDelay}s`,
+                      fontSize: `${randomSize}rem`,
+                    } as React.CSSProperties & { '--drift': string; '--rotation': string }}
+                  >
+                    {i % 3 === 0 ? '💰' : i % 3 === 1 ? '🤑' : '💸'}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Success/Error Messages */}
           {faucetStatus === "success" && (
-            <Alert className="border mt-2" style={{ background: "#050B18", borderColor: "#22C55E" }}>
+            <Alert className="border mt-2 py-3" style={{ background: "#050B18", borderColor: "#22C55E" }}>
               <CheckCircle2 className="h-5 w-5" style={{ color: "#22C55E" }} />
               <AlertTitle style={{ color: "#22C55E", fontSize: "18px", fontWeight: "600" }}>
                 ✅ Claim Successful!
               </AlertTitle>
-              <AlertDescription style={{ color: "#E5E7EB" }} className="mt-3 space-y-2">
+              <AlertDescription style={{ color: "#E5E7EB" }} className="mt-2 space-y-2">
                 <p className="text-base">
-                  <strong>100 USDC (testnet)</strong> has been sent to the selected address.
+                  <strong>100 {selectedToken} (testnet)</strong> has been sent to the selected address.
                 </p>
                 {destinationAddress && (
                   <p className="text-xs font-mono" style={{ color: "#9CA3AF" }}>
@@ -533,7 +601,7 @@ export default function FaucetPage() {
         </div>
 
         {/* Alerts */}
-        <div className="space-y-4 mb-4">
+        <div className="space-y-3">
 
           {faucetStatus === "paused" && (
             <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
@@ -573,8 +641,43 @@ export default function FaucetPage() {
 
         </div>
 
+        {/* Token Selector - Hidden until EURC contract is ready */}
+        {false && (
+          <div className="mb-1">
+            <Tabs value={selectedToken} onValueChange={(value) => setSelectedToken(value as "USDC" | "EURC")}>
+              <TabsList 
+                className="w-full h-12 p-1 rounded-lg"
+                style={{ background: "#1E293B" }}
+              >
+                <TabsTrigger
+                  value="USDC"
+                  className="flex-1 h-10 rounded-md text-sm font-medium transition-all"
+                  style={{
+                    background: selectedToken === "USDC" ? "linear-gradient(90deg, #2F2CFF, #C035FF)" : "transparent",
+                    color: selectedToken === "USDC" ? "#F9FAFB" : "#9CA3AF",
+                    border: "none",
+                  }}
+                >
+                  USDC
+                </TabsTrigger>
+                <TabsTrigger
+                  value="EURC"
+                  className="flex-1 h-10 rounded-md text-sm font-medium transition-all"
+                  style={{
+                    background: selectedToken === "EURC" ? "linear-gradient(90deg, #2F2CFF, #C035FF)" : "transparent",
+                    color: selectedToken === "EURC" ? "#F9FAFB" : "#9CA3AF",
+                    border: "none",
+                  }}
+                >
+                  EURC
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        )}
+
         {/* Claim Button & Twitter Share */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-2">
+        <div className="flex flex-col sm:flex-row gap-3">
           <Button
             onClick={handleClaim}
             disabled={isClaimDisabled}
@@ -590,7 +693,7 @@ export default function FaucetPage() {
                 Claiming...
               </>
             ) : (
-              "Claim 100 USDC (testnet)"
+              `Claim 100 ${selectedToken} (testnet)`
             )}
           </Button>
 
@@ -619,105 +722,42 @@ export default function FaucetPage() {
           </a>
         </div>
 
-        {/* Faucet Balance - Below Claim Button */}
-        {faucetBalance !== undefined && (
-          <div className="mb-2 text-left">
-            <p className="text-xs" style={{ color: "#6B7280" }}>
-              Available: {Number(faucetBalance) / 1_000_000} USDC (testnet)
-            </p>
-          </div>
-        )}
+        {/* Faucet Stats Section */}
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold mb-3" style={{ color: "#F9FAFB" }}>
+            Faucet Stats
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Card 1 - Available */}
+            {faucetBalance !== undefined && (
+              <div className="p-4 rounded-lg border" style={{ background: "#1E293B", borderColor: "#1E293B" }}>
+                <p className="text-xs mb-2" style={{ color: "#9CA3AF" }}>
+                  Available
+                </p>
+                <p className="text-sm font-medium" style={{ color: "#F9FAFB" }}>
+                  {Number(faucetBalance) / 1_000_000} {selectedToken} (testnet)
+                </p>
+              </div>
+            )}
 
-        {/* Tutorial Toggle Button */}
-        <button
-          onClick={() => setIsTutorialExpanded(!isTutorialExpanded)}
-          aria-expanded={isTutorialExpanded}
-          className="w-full mb-2 text-xs text-center transition-colors hover:opacity-80 flex items-center justify-center gap-2"
-          style={{ color: "#9CA3AF" }}
-        >
-          <span>Do you need more faucets? You should follow this tutorial</span>
-          <ChevronDown
-            className={`w-4 h-4 transition-transform duration-300 ${isTutorialExpanded ? "rotate-180" : ""}`}
-          />
-        </button>
-
-        {/* Tutorial Content */}
-        <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out ${
-            isTutorialExpanded ? "max-h-96 opacity-100 mb-3" : "max-h-0 opacity-0 mb-0"
-          }`}
-        >
-          <div
-            className="p-4 rounded-lg border space-y-3"
-            style={{ background: "#050B18", borderColor: "#1E293B" }}
-          >
-            <ol className="space-y-3 text-sm" style={{ color: "#F9FAFB" }}>
-              <li className="flex flex-col gap-1">
-                <span className="font-medium">
-                  1) <span style={{ color: "#9CA3AF" }}>Get assets on Sepolia:</span>
-                </span>
-                <a
-                  href="https://sepolia-faucet.pk910.de/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs break-all hover:underline transition-colors"
-                  style={{ color: "#2F2CFF" }}
-                >
-                  https://sepolia-faucet.pk910.de/
-                </a>
-              </li>
-              <li className="flex flex-col gap-1">
-                <span className="font-medium">
-                  2) <span style={{ color: "#9CA3AF" }}>Swap the assets using Uniswap (Sepolia):</span>
-                </span>
-                <a
-                  href="https://app.uniswap.org/swap?chain=sepolia&inputCurrency=NATIVE&outputCurrency=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238&value=2.4&field=input"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs break-all hover:underline transition-colors"
-                  style={{ color: "#2F2CFF" }}
-                >
-                  https://app.uniswap.org/swap?chain=sepolia&inputCurrency=NATIVE&outputCurrency=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238&value=2.4&field=input
-                </a>
-              </li>
-              <li className="flex flex-col gap-1">
-                <span className="font-medium">
-                  3) <span style={{ color: "#9CA3AF" }}>Bridge using Superbridge:</span>
-                </span>
-                <a
-                  href="https://superbridge.app/?fromChainId=11155111&toChainId=5042002"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs break-all hover:underline transition-colors"
-                  style={{ color: "#2F2CFF" }}
-                >
-                  https://superbridge.app/?fromChainId=11155111&toChainId=5042002
-                </a>
-              </li>
-            </ol>
-            <p className="text-xs mt-4 pt-3 border-t" style={{ color: "#9CA3AF", borderColor: "#1E293B" }}>
-              This process can take up to one hour to complete.
-            </p>
+            {/* Card 2 - Claims Processed */}
+            {totalClaims !== undefined && (
+              <div className="p-4 rounded-lg border" style={{ background: "#1E293B", borderColor: "#1E293B" }}>
+                <p className="text-xs mb-2 flex items-center gap-1" style={{ color: "#9CA3AF" }}>
+                  Claims processed
+                </p>
+                <p className="text-sm font-medium" style={{ color: "#F9FAFB" }}>
+                  <span style={{ color: "#22C55E", fontWeight: "600" }}>
+                    {typeof totalClaims === "bigint" ? totalClaims.toString() : totalClaims || "0"}
+                  </span>
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Total Claims Counter - Social Proof */}
-        {totalClaims !== undefined && (
-          <div className="mb-2 text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg" style={{ background: "#1E293B" }}>
-              <Info className="h-4 w-4" style={{ color: "#9CA3AF" }} />
-              <span className="text-sm font-medium" style={{ color: "#F9FAFB" }}>
-                <span style={{ color: "#22C55E", fontWeight: "600" }}>
-                  {typeof totalClaims === "bigint" ? totalClaims.toString() : totalClaims || "0"}
-                </span>
-                {" "}claims processed
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Info Box */}
-        <div className="space-y-2 p-4 rounded-lg" style={{ background: "#1E293B" }}>
+        <div className="space-y-2 p-4 rounded-lg mt-2" style={{ background: "#1E293B" }}>
           <h3 className="font-semibold text-sm mb-3" style={{ color: "#F9FAFB" }}>
             Faucet Information
           </h3>
@@ -751,6 +791,81 @@ export default function FaucetPage() {
               <span>Maximum amount: 100 USDC (testnet) per claim.</span>
             </li>
           </ul>
+        </div>
+
+        {/* Tutorial Toggle Button */}
+        <div className="mb-2">
+          <button
+            onClick={() => setIsTutorialExpanded(!isTutorialExpanded)}
+            aria-expanded={isTutorialExpanded}
+            className="w-full text-xs text-center transition-colors hover:opacity-80 flex items-center justify-center gap-2"
+            style={{ color: "#9CA3AF" }}
+          >
+            <span>Do you need more faucets? You should follow this tutorial</span>
+            <ChevronDown
+              className={`w-4 h-4 transition-transform duration-300 ${isTutorialExpanded ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {/* Tutorial Content */}
+          <div
+            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+              isTutorialExpanded ? "max-h-96 opacity-100 mt-2" : "max-h-0 opacity-0 mt-0"
+            }`}
+          >
+            <div
+              className="p-4 rounded-lg border space-y-3"
+              style={{ background: "#050B18", borderColor: "#1E293B" }}
+            >
+              <ol className="space-y-3 text-sm" style={{ color: "#F9FAFB" }}>
+                <li className="flex flex-col gap-1">
+                  <span className="font-medium">
+                    1) <span style={{ color: "#9CA3AF" }}>Get assets on Sepolia:</span>
+                  </span>
+                  <a
+                    href="https://sepolia-faucet.pk910.de/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs break-all hover:underline transition-colors"
+                    style={{ color: "#2F2CFF" }}
+                  >
+                    https://sepolia-faucet.pk910.de/
+                  </a>
+                </li>
+                <li className="flex flex-col gap-1">
+                  <span className="font-medium">
+                    2) <span style={{ color: "#9CA3AF" }}>Swap the assets using Uniswap (Sepolia):</span>
+                  </span>
+                  <a
+                    href="https://app.uniswap.org/swap?chain=sepolia&inputCurrency=NATIVE&outputCurrency=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238&value=2.4&field=input"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs break-all hover:underline transition-colors"
+                    style={{ color: "#2F2CFF" }}
+                  >
+                    https://app.uniswap.org/swap?chain=sepolia&inputCurrency=NATIVE&outputCurrency=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238&value=2.4&field=input
+                  </a>
+                </li>
+                <li className="flex flex-col gap-1">
+                  <span className="font-medium">
+                    3) <span style={{ color: "#9CA3AF" }}>Bridge using Superbridge:</span>
+                  </span>
+                  <a
+                    href="https://superbridge.app/?fromChainId=11155111&toChainId=5042002"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs break-all hover:underline transition-colors"
+                    style={{ color: "#2F2CFF" }}
+                  >
+                    https://superbridge.app/?fromChainId=11155111&toChainId=5042002
+                  </a>
+                </li>
+              </ol>
+              <p className="text-xs mt-4 pt-3 border-t" style={{ color: "#9CA3AF", borderColor: "#1E293B" }}>
+                This process can take up to one hour to complete.
+              </p>
+            </div>
+          </div>
         </div>
       </Card>
 

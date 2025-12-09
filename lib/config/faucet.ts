@@ -14,6 +14,17 @@ export const FAUCET_CONTRACT_ADDRESS = "0x554F2856926326dE250f0e855654c408E28224
 // Source: https://testnet.arcscan.app/token/0x3600000000000000000000000000000000000000
 export const USDC_TESTNET_ADDRESS = "0x3600000000000000000000000000000000000000" as const;
 
+// EURC testnet token address on ARC Testnet
+// TODO: Replace with actual EURC testnet token address after deployment
+export const EURC_TESTNET_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+
+// USDC faucet contract address on ARC Testnet
+export const USDC_FAUCET_ADDRESS = FAUCET_CONTRACT_ADDRESS;
+
+// EURC faucet contract address on ARC Testnet
+// TODO: Replace with actual EURC faucet contract address after deployment
+export const EURC_FAUCET_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+
 // ARC Testnet chain ID (from MetaMask configuration)
 export const ARC_TESTNET_CHAIN_ID = 5042002;
 

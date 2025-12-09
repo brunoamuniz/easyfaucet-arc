@@ -12,8 +12,8 @@ div[data-testid="rk-connect-button"] {
 button[data-testid="rk-connect-button"],
 div[data-testid="rk-connect-button"] > button {
   width: 100% !important;
-  max-width: 400px !important;
-  min-width: 200px !important;
+  max-width: 800px !important;
+  min-width: 400px !important;
   height: 48px !important;
   font-size: 16px !important;
   font-weight: 600 !important;
@@ -160,5 +160,16 @@ div[data-testid="rk-connect-button"] > button:active {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@keyframes moneyRain {
+  0% {
+    opacity: 1;
+    transform: translateX(0) translateY(0) rotate(var(--rotation, 0deg)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(var(--drift, 0px)) translateY(110vh) rotate(calc(var(--rotation, 0deg) + 360deg)) scale(0.8);
   }
 }
