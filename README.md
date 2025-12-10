@@ -92,6 +92,12 @@ PRIVATE_KEY=0x...
 
 # ARC Testnet RPC URL (optional, defaults to https://rpc.testnet.arc.network)
 ARC_TESTNET_RPC_URL=https://rpc.testnet.arc.network
+
+# Telegram Bot Configuration (optional, for balance alerts)
+# Get token from @BotFather on Telegram
+# Get chat ID from @userinfobot on Telegram
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
 ```
 
 **⚠️ Important:** Never commit your `.env.local` file. It's already in `.gitignore`.

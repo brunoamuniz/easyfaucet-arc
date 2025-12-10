@@ -148,11 +148,23 @@ export async function POST(request: NextRequest) {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
       if (receipt.status === "success") {
-        return NextResponse.json({
+        // Prepare success response
+        const response = NextResponse.json({
           success: true,
           transactionHash: hash,
           address,
         });
+
+        // [ASSÍNCRONO] Check balance and send alert if needed
+        // Fire-and-forget: don't await, don't block response
+        import('@/lib/services/balance-checker').then(({ checkBalanceAndNotify }) => {
+          checkBalanceAndNotify(selectedToken).catch((error) => {
+            // Log error but don't throw - this is a background task
+            console.error(`Background balance check/alert error for ${selectedToken}:`, error);
+          });
+        });
+
+        return response;
       } else {
         return NextResponse.json(
           { error: "Transaction failed" },
