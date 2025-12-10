@@ -321,6 +321,32 @@ export default function FaucetPage() {
     setFaucetStatus("idle");
   }, [paused, canClaimResult, faucetBalance, faucetStatus, destinationAddress, isValidDestinationAddress, errorTimestamp, selectedToken, address]);
 
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setDestinationAddress(text.trim());
+        setAddressValidationError("");
+      }
+    } catch (error) {
+      // Fallback for browsers that don't support clipboard API
+      console.error("Failed to read clipboard:", error);
+      // Try using a temporary input element as fallback
+      const tempInput = document.createElement("input");
+      tempInput.style.position = "fixed";
+      tempInput.style.opacity = "0";
+      document.body.appendChild(tempInput);
+      tempInput.focus();
+      document.execCommand("paste");
+      const pastedText = tempInput.value;
+      document.body.removeChild(tempInput);
+      if (pastedText) {
+        setDestinationAddress(pastedText.trim());
+        setAddressValidationError("");
+      }
+    }
+  };
+
   const handleClaim = async () => {
     // Validate destination address
     if (!destinationAddress || !isValidDestinationAddress) {
@@ -503,20 +529,34 @@ export default function FaucetPage() {
           <Label htmlFor="destination-address" className="text-sm" style={{ color: "#F9FAFB" }}>
             Destination address
           </Label>
-          <Input
-            id="destination-address"
-            type="text"
-            placeholder="0x1234...ABCD"
-            value={destinationAddress}
-            onChange={(e) => setDestinationAddress(e.target.value)}
-            className="w-full"
-            style={{
-              background: "#1E293B",
-              borderColor: addressValidationError ? "#EF4444" : "#1E293B",
-              color: "#F9FAFB",
-            }}
-            aria-invalid={!!addressValidationError}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="destination-address"
+              type="text"
+              placeholder="0x1234...ABCD"
+              value={destinationAddress}
+              onChange={(e) => setDestinationAddress(e.target.value)}
+              className="flex-1"
+              style={{
+                background: "#1E293B",
+                borderColor: addressValidationError ? "#EF4444" : "#1E293B",
+                color: "#F9FAFB",
+              }}
+              aria-invalid={!!addressValidationError}
+            />
+            <Button
+              onClick={handlePaste}
+              type="button"
+              className="font-medium text-sm px-4 whitespace-nowrap"
+              style={{
+                background: "linear-gradient(90deg, #2F2CFF, #C035FF)",
+                color: "#F9FAFB",
+                border: "none",
+              }}
+            >
+              Paste
+            </Button>
+          </div>
           {addressValidationError ? (
             <p className="text-xs" style={{ color: "#EF4444" }}>
               {addressValidationError}
