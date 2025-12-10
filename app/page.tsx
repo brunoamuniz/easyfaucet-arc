@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, CheckCircle2, AlertCircle, Info, ChevronDown, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,6 +116,7 @@ export default function FaucetPage() {
   const [errorTimestamp, setErrorTimestamp] = useState<number>(0);
   const [selectedToken, setSelectedToken] = useState<"USDC" | "EURC">("USDC");
   const [showSuccessAnimation, setShowSuccessAnimation] = useState<boolean>(false);
+  const [showShareModal, setShowShareModal] = useState<boolean>(false);
 
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== ARC_TESTNET_CHAIN_ID;
@@ -144,6 +146,7 @@ export default function FaucetPage() {
       setFaucetStatus("idle");
       setTxHash("");
       setShowSuccessAnimation(false);
+      setShowShareModal(false);
     }
   }, [destinationAddress, address]);
 
@@ -437,6 +440,11 @@ export default function FaucetPage() {
       if (recipientAddress) {
         storeSuccessfulClaim(recipientAddress, selectedToken);
       }
+
+      // Show share modal after a short delay
+      setTimeout(() => {
+        setShowShareModal(true);
+      }, 2500);
 
       // Refetch canClaim and totalClaims to update UI immediately
       setTimeout(() => {
@@ -919,6 +927,75 @@ export default function FaucetPage() {
           </div>
         </div>
       </Card>
+
+      {/* Share on X Modal */}
+      <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
+        <DialogContent 
+          className="sm:max-w-md"
+          style={{
+            background: "#050B18",
+            borderColor: "#1E293B",
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle 
+              className="text-xl font-bold text-center"
+              style={{ color: "#F9FAFB" }}
+            >
+              🎉 Claim Successful!
+            </DialogTitle>
+            <DialogDescription 
+              className="text-center mt-2"
+              style={{ color: "#9CA3AF" }}
+            >
+              Share your success and help others discover Easy Faucet Arc!
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            <div 
+              className="p-4 rounded-lg border"
+              style={{ 
+                background: "#1E293B", 
+                borderColor: "#1E293B" 
+              }}
+            >
+              <p className="text-sm whitespace-pre-line" style={{ color: "#E5E7EB" }}>
+                {tweetText}
+              </p>
+            </div>
+            
+            <a
+              href={twitterShareUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-all hover:opacity-90"
+              style={{
+                background: "linear-gradient(90deg, #2F2CFF, #C035FF)",
+                color: "#F9FAFB",
+                textDecoration: "none",
+              }}
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+              <span>Share on X</span>
+            </a>
+            
+            <button
+              onClick={() => setShowShareModal(false)}
+              className="w-full px-6 py-3 rounded-lg font-medium transition-all hover:opacity-80 border"
+              style={{
+                background: "transparent",
+                borderColor: "#1E293B",
+                color: "#9CA3AF",
+              }}
+            >
+              Maybe later
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <footer className="w-full max-w-[560px] mt-8 text-center space-y-4">
         <div className="flex items-center justify-center gap-6">
