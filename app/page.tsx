@@ -19,6 +19,12 @@ import { arcTestnet } from "@/lib/config/chains";
 // App URL - defaults to production domain
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://easyfaucetarc.xyz";
 
+// Claim amounts per token (6 decimals for both USDC and EURC)
+const CLAIM_AMOUNTS = {
+  USDC: 100,
+  EURC: 50, // Reduced from 100 to 50
+} as const;
+
 type FaucetStatus =
   | "idle"
   | "loading"
@@ -43,14 +49,16 @@ function getDeviceId(): string {
 }
 
 // Helper function to check cooldown (localStorage - extra layer)
-function checkLocalCooldown(address: string): { isInCooldown: boolean; remainingTime: number } {
+// Now includes token to allow independent cooldowns for USDC and EURC
+function checkLocalCooldown(address: string, token: "USDC" | "EURC"): { isInCooldown: boolean; remainingTime: number } {
   if (typeof window === "undefined") {
     return { isInCooldown: false, remainingTime: 0 };
   }
 
   const deviceId = getDeviceId();
-  const addressKey = `arc-faucet:lastClaim:${address.toLowerCase()}`;
-  const deviceKey = `arc-faucet:lastClaimDevice:${deviceId}`;
+  // Include token in keys to allow independent cooldowns per token
+  const addressKey = `arc-faucet:lastClaim:${address.toLowerCase()}:${token}`;
+  const deviceKey = `arc-faucet:lastClaimDevice:${deviceId}:${token}`;
 
   const lastClaimAddress = localStorage.getItem(addressKey);
   const lastClaimDevice = localStorage.getItem(deviceKey);
@@ -81,12 +89,14 @@ function checkLocalCooldown(address: string): { isInCooldown: boolean; remaining
 }
 
 // Store successful claim in localStorage
-function storeSuccessfulClaim(address: string) {
+// Now includes token to allow independent cooldowns for USDC and EURC
+function storeSuccessfulClaim(address: string, token: "USDC" | "EURC") {
   if (typeof window === "undefined") return;
   const deviceId = getDeviceId();
   const now = Date.now().toString();
-  localStorage.setItem(`arc-faucet:lastClaim:${address.toLowerCase()}`, now);
-  localStorage.setItem(`arc-faucet:lastClaimDevice:${deviceId}`, now);
+  // Include token in keys to allow independent cooldowns per token
+  localStorage.setItem(`arc-faucet:lastClaim:${address.toLowerCase()}:${token}`, now);
+  localStorage.setItem(`arc-faucet:lastClaimDevice:${deviceId}:${token}`, now);
 }
 
 export default function FaucetPage() {
@@ -252,7 +262,7 @@ export default function FaucetPage() {
         setErrorMessage("");
         setErrorTimestamp(0); // Clear error timestamp
         if (destinationAddress) {
-          storeSuccessfulClaim(destinationAddress);
+          storeSuccessfulClaim(destinationAddress, selectedToken);
         }
         return;
       }
@@ -277,11 +287,11 @@ export default function FaucetPage() {
         setRemainingCooldownSeconds(canClaimResult.remainingSeconds);
         return;
       } else if (canClaimResult.allowed) {
-        // Contract says we can claim - clear any stale local cooldown
+        // Contract says we can claim - clear any stale local cooldown for this token
         if (typeof window !== "undefined" && address) {
           const deviceId = getDeviceId();
-          localStorage.removeItem(`arc-faucet:lastClaim:${address.toLowerCase()}`);
-          localStorage.removeItem(`arc-faucet:lastClaimDevice:${deviceId}`);
+          localStorage.removeItem(`arc-faucet:lastClaim:${address.toLowerCase()}:${selectedToken}`);
+          localStorage.removeItem(`arc-faucet:lastClaimDevice:${deviceId}:${selectedToken}`);
         }
         // Don't check local cooldown if contract allows claim
       } else if (!canClaimResult.allowed && canClaimResult.remainingSeconds === 0) {
@@ -292,9 +302,9 @@ export default function FaucetPage() {
 
     // Check local cooldown only if contract doesn't have data yet
     // Once contract responds, it becomes the source of truth
-    // Use destinationAddress for cooldown check
+    // Use destinationAddress and selectedToken for cooldown check
     if (!canClaimResult && destinationAddress && isValidDestinationAddress) {
-      const localCooldown = checkLocalCooldown(destinationAddress);
+      const localCooldown = checkLocalCooldown(destinationAddress, selectedToken);
       if (localCooldown.isInCooldown) {
         setFaucetStatus("cooldown");
         setRemainingCooldownSeconds(Math.floor(localCooldown.remainingTime / 1000));
@@ -309,7 +319,7 @@ export default function FaucetPage() {
     }
 
     setFaucetStatus("idle");
-  }, [paused, canClaimResult, faucetBalance, faucetStatus, destinationAddress, isValidDestinationAddress, errorTimestamp]);
+  }, [paused, canClaimResult, faucetBalance, faucetStatus, destinationAddress, isValidDestinationAddress, errorTimestamp, selectedToken, address]);
 
   const handleClaim = async () => {
     // Validate destination address
@@ -346,7 +356,10 @@ export default function FaucetPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ address: recipientAddress }),
+        body: JSON.stringify({ 
+          address: recipientAddress,
+          token: selectedToken, // Send selected token to API
+        }),
       });
 
       // Check if response is ok before parsing JSON
@@ -396,7 +409,7 @@ export default function FaucetPage() {
       
       // Store successful claim in localStorage
       if (recipientAddress) {
-        storeSuccessfulClaim(recipientAddress);
+        storeSuccessfulClaim(recipientAddress, selectedToken);
       }
 
       // Refetch canClaim and totalClaims to update UI immediately
@@ -436,7 +449,7 @@ export default function FaucetPage() {
 
   // Twitter share URL
   const tweetText = useMemo(() => 
-    `I'm claiming 100 ${selectedToken} on ARC testnet using Easy Faucet Arc to power my dApp testing! 🚀
+    `I'm claiming ${CLAIM_AMOUNTS[selectedToken]} ${selectedToken} on ARC testnet using Easy Faucet Arc to power my dApp testing! 🚀
 
 @ARC ${APP_URL}
 
@@ -460,14 +473,14 @@ export default function FaucetPage() {
             Easy Faucet Arc Testnet
           </h1>
           <p className="text-sm leading-relaxed text-balance" style={{ color: "#9CA3AF" }}>
-            Get up to 100 USDC (testnet) to develop on the ARC Network. The official faucet only provides 1 USDC per
+            Get up to {CLAIM_AMOUNTS[selectedToken]} {selectedToken} (testnet) to develop on the ARC Network. The official faucet only provides 1 {selectedToken} per
             hour.
           </p>
         </div>
 
         {/* Wallet Connection - Centralized and Styled */}
         <div className="flex items-center justify-center w-full mb-2">
-          <div className="w-full max-w-[800px] flex justify-center">
+          <div className="w-full flex justify-center sm:max-w-[800px] max-w-full">
             <ConnectButton showBalance={false} />
           </div>
         </div>
@@ -554,7 +567,7 @@ export default function FaucetPage() {
               </AlertTitle>
               <AlertDescription style={{ color: "#E5E7EB" }} className="mt-2 space-y-2">
                 <p className="text-base">
-                  <strong>100 {selectedToken} (testnet)</strong> has been sent to the selected address.
+                  <strong>{CLAIM_AMOUNTS[selectedToken]} {selectedToken} (testnet)</strong> has been sent to the selected address.
                 </p>
                 {destinationAddress && (
                   <p className="text-xs font-mono" style={{ color: "#9CA3AF" }}>
@@ -641,40 +654,38 @@ export default function FaucetPage() {
 
         </div>
 
-        {/* Token Selector - Hidden until EURC contract is ready */}
-        {false && (
-          <div className="mb-1">
-            <Tabs value={selectedToken} onValueChange={(value) => setSelectedToken(value as "USDC" | "EURC")}>
-              <TabsList 
-                className="w-full h-12 p-1 rounded-lg"
-                style={{ background: "#1E293B" }}
+        {/* Token Selector */}
+        <div className="mb-1">
+          <Tabs value={selectedToken} onValueChange={(value) => setSelectedToken(value as "USDC" | "EURC")}>
+            <TabsList 
+              className="w-full h-12 p-1 rounded-lg"
+              style={{ background: "#1E293B" }}
+            >
+              <TabsTrigger
+                value="USDC"
+                className="flex-1 h-10 rounded-md text-sm font-medium transition-all"
+                style={{
+                  background: selectedToken === "USDC" ? "linear-gradient(90deg, #2F2CFF, #C035FF)" : "transparent",
+                  color: selectedToken === "USDC" ? "#F9FAFB" : "#9CA3AF",
+                  border: "none",
+                }}
               >
-                <TabsTrigger
-                  value="USDC"
-                  className="flex-1 h-10 rounded-md text-sm font-medium transition-all"
-                  style={{
-                    background: selectedToken === "USDC" ? "linear-gradient(90deg, #2F2CFF, #C035FF)" : "transparent",
-                    color: selectedToken === "USDC" ? "#F9FAFB" : "#9CA3AF",
-                    border: "none",
-                  }}
-                >
-                  USDC
-                </TabsTrigger>
-                <TabsTrigger
-                  value="EURC"
-                  className="flex-1 h-10 rounded-md text-sm font-medium transition-all"
-                  style={{
-                    background: selectedToken === "EURC" ? "linear-gradient(90deg, #2F2CFF, #C035FF)" : "transparent",
-                    color: selectedToken === "EURC" ? "#F9FAFB" : "#9CA3AF",
-                    border: "none",
-                  }}
-                >
-                  EURC
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-        )}
+                USDC
+              </TabsTrigger>
+              <TabsTrigger
+                value="EURC"
+                className="flex-1 h-10 rounded-md text-sm font-medium transition-all"
+                style={{
+                  background: selectedToken === "EURC" ? "linear-gradient(90deg, #2F2CFF, #C035FF)" : "transparent",
+                  color: selectedToken === "EURC" ? "#F9FAFB" : "#9CA3AF",
+                  border: "none",
+                }}
+              >
+                EURC
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
 
         {/* Claim Button & Twitter Share */}
         <div className="flex flex-col sm:flex-row gap-3">
@@ -693,7 +704,7 @@ export default function FaucetPage() {
                 Claiming...
               </>
             ) : (
-              `Claim 100 ${selectedToken} (testnet)`
+              `Claim ${CLAIM_AMOUNTS[selectedToken]} ${selectedToken} (testnet)`
             )}
           </Button>
 
@@ -780,7 +791,7 @@ export default function FaucetPage() {
             </li>
             <li className="flex items-start">
               <span className="mr-2">•</span>
-              <span>This faucet provides up to 100 USDC per day.</span>
+              <span>This faucet provides up to {CLAIM_AMOUNTS[selectedToken]} {selectedToken} per day.</span>
             </li>
             <li className="flex items-start">
               <span className="mr-2">•</span>
@@ -788,7 +799,7 @@ export default function FaucetPage() {
             </li>
             <li className="flex items-start">
               <span className="mr-2">•</span>
-              <span>Maximum amount: 100 USDC (testnet) per claim.</span>
+              <span>Maximum amount: {CLAIM_AMOUNTS[selectedToken]} {selectedToken} (testnet) per claim.</span>
             </li>
           </ul>
         </div>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createWalletClient, createPublicClient, http, isAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { FAUCET_CONTRACT_ADDRESS, ARC_TESTNET_CHAIN_ID } from "@/lib/config/faucet";
+import { FAUCET_CONTRACT_ADDRESS, ARC_TESTNET_CHAIN_ID, USDC_FAUCET_ADDRESS, EURC_FAUCET_ADDRESS } from "@/lib/config/faucet";
 import { ARCTESTNET_FAUCET_ABI } from "@/lib/contracts/ArcTestnetFaucet.abi";
 import { arcTestnet } from "@/lib/config/chains";
 
@@ -44,7 +44,19 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body = await request.json();
-    const { address } = body;
+    const { address, token } = body;
+    
+    // Validate and select faucet contract based on token
+    const selectedToken = (token === "EURC" ? "EURC" : "USDC") as "USDC" | "EURC";
+    const faucetAddress = selectedToken === "EURC" ? EURC_FAUCET_ADDRESS : USDC_FAUCET_ADDRESS;
+    
+    // Validate that the selected contract is not a placeholder
+    if (faucetAddress === "0x0000000000000000000000000000000000000000") {
+      return NextResponse.json(
+        { error: `Faucet contract for ${selectedToken} is not configured` },
+        { status: 500 }
+      );
+    }
 
     // Validate address
     if (!address || typeof address !== "string") {
@@ -91,7 +103,7 @@ export async function POST(request: NextRequest) {
     // Check if address can claim (read from contract)
     try {
       const canClaimResult = await publicClient.readContract({
-        address: FAUCET_CONTRACT_ADDRESS,
+        address: faucetAddress,
         abi: ARCTESTNET_FAUCET_ABI,
         functionName: "canClaim",
         args: [address as `0x${string}`],
@@ -126,7 +138,7 @@ export async function POST(request: NextRequest) {
     // Execute claimFor transaction
     try {
       const hash = await walletClient.writeContract({
-        address: FAUCET_CONTRACT_ADDRESS,
+        address: faucetAddress,
         abi: ARCTESTNET_FAUCET_ABI,
         functionName: "claimFor",
         args: [address as `0x${string}`],
