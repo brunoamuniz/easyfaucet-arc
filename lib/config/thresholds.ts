@@ -12,7 +12,7 @@ export const THRESHOLDS = {
     minClaimsBeforeAlert: 5, // Alert if < 5 claims remaining
   },
   EURC: {
-    alert: 500, // Alert if balance < 500 EURC
+    alert: 1000, // Alert if balance < 1000 EURC (updated for production testing)
     claimAmount: 50, // Amount per claim
     minClaimsBeforeAlert: 5, // Alert if < 5 claims remaining
   },
