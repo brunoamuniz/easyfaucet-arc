@@ -39,6 +39,7 @@ export function ProjectsShowcase({ className }: ProjectsShowcaseProps) {
   const [isPaused, setIsPaused] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [totalProjectsRegistered, setTotalProjectsRegistered] = useState<number | null>(null);
 
   // Fetch projects from API
   useEffect(() => {
@@ -52,6 +53,10 @@ export function ProjectsShowcase({ className }: ProjectsShowcaseProps) {
           // Randomize the order of projects
           const shuffledProjects = shuffleArray(data.data);
           setProjects(shuffledProjects);
+          // Store total projects registered
+          if (data.stats?.totalProjectsRegistered) {
+            setTotalProjectsRegistered(data.stats.totalProjectsRegistered);
+          }
         } else {
           console.error("Failed to fetch projects:", data);
           setProjects([]);
@@ -139,15 +144,21 @@ export function ProjectsShowcase({ className }: ProjectsShowcaseProps) {
                 href="https://arcindex.xyz"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:opacity-80 transition-opacity"
+                className="hover:opacity-80 transition-opacity inline-block"
               >
                 <h2 className="text-2xl font-bold" style={{ color: "#F9FAFB" }}>
                   Arc Index
                 </h2>
               </a>
               <p className="text-sm" style={{ color: "#9CA3AF" }}>
-                Explore tools and projects built on ARC
+                The curated project index for Arc Network
               </p>
+              {/* Discreet project count information */}
+              {projects.length > 0 && (
+                <p className="text-xs opacity-60" style={{ color: "#6B7280" }}>
+                  {projects.length} projects available
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <Button
@@ -324,7 +335,7 @@ function ProjectCard({ project }: { project: Project }) {
     >
       <CardHeader className="p-0">
         {/* Project Image */}
-        <div className="relative w-full h-48 overflow-hidden rounded-t-lg">
+        <div className="relative w-full h-40 overflow-hidden rounded-t-lg">
           {!imageError && project.imageUrl ? (
             <img
               src={project.imageUrl}
@@ -343,7 +354,7 @@ function ProjectCard({ project }: { project: Project }) {
         </div>
       </CardHeader>
 
-      <CardContent className="flex flex-col flex-1 p-4 space-y-3">
+      <CardContent className="flex flex-col flex-1 p-4 space-y-2">
         {/* Category Badge */}
         <div className="flex items-center justify-between">
           <span
@@ -363,7 +374,11 @@ function ProjectCard({ project }: { project: Project }) {
         </CardTitle>
 
         {/* Description */}
-        <CardDescription className="text-sm flex-1" style={{ color: "#9CA3AF" }}>
+        <CardDescription 
+          className="text-sm flex-1 line-clamp-2 overflow-hidden" 
+          style={{ color: "#9CA3AF" }}
+          title={project.description}
+        >
           {project.description}
         </CardDescription>
 

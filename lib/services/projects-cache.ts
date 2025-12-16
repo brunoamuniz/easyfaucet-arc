@@ -29,6 +29,7 @@ interface ArcIndexResponse {
 
 // In-memory cache
 let cachedProjects: Project[] | null = null;
+let totalProjectsRegistered: number | null = null; // Total projects registered in Arc Index
 let cacheTimestamp: number = 0;
 let isRefreshing: boolean = false;
 let refreshIntervalId: NodeJS.Timeout | null = null;
@@ -37,23 +38,27 @@ let refreshIntervalId: NodeJS.Timeout | null = null;
  * Maps Arc Index API project to our Project interface
  */
 function mapArcIndexProject(project: ArcIndexProject): Project {
-  // Map category to our ProjectCategory type
+  // Map category from Arc Index API to our ProjectCategory type
   const categoryMap: Record<string, string> = {
     Tools: "Tools",
-    Gaming: "Other",
     DeFi: "DeFi",
     Explorer: "Explorer",
     NFT: "NFT",
     Bridge: "Bridge",
+    Gaming: "Gaming",
+    Infrastructure: "Tools", // Infrastructure projects are tools
+    Social: "Tools", // Social platforms are tools
+    Other: "Other",
   };
 
+  // Get category from map, defaulting to "Other" if not found
   const category = categoryMap[project.category] || "Other";
 
   return {
     id: project.id,
     name: project.name,
     description: project.description,
-    category: category as "Tools" | "DeFi" | "Explorer" | "NFT" | "Bridge" | "Other",
+    category: category as "Tools" | "DeFi" | "Explorer" | "NFT" | "Bridge" | "Gaming" | "Other",
     imageUrl: project.image_thumb_url || project.image_url || "",
     projectUrl: project.website_url || project.project_url || "",
     twitter: project.x_url || undefined,
@@ -66,7 +71,7 @@ function mapArcIndexProject(project: ArcIndexProject): Project {
 /**
  * Fetches projects from Arc Index API
  */
-async function fetchProjectsFromAPI(): Promise<Project[]> {
+async function fetchProjectsFromAPI(): Promise<{ projects: Project[]; total: number }> {
   try {
     const response = await fetch(ARC_INDEX_API_URL, {
       cache: "no-store",
@@ -82,7 +87,10 @@ async function fetchProjectsFromAPI(): Promise<Project[]> {
       throw new Error("Invalid response format from Arc Index API");
     }
 
-    return data.data.map(mapArcIndexProject);
+    const projects = data.data.map(mapArcIndexProject);
+    const total = data.pagination?.total || data.data.length;
+
+    return { projects, total };
   } catch (error) {
     console.error("Error fetching projects from Arc Index API:", error);
     throw error;
@@ -103,13 +111,14 @@ export async function refreshProjectsCache(): Promise<Project[]> {
     isRefreshing = true;
     console.log("Refreshing projects cache...");
 
-    const projects = await fetchProjectsFromAPI();
+    const { projects, total } = await fetchProjectsFromAPI();
 
     // Update cache
     cachedProjects = projects;
+    totalProjectsRegistered = total;
     cacheTimestamp = Date.now();
 
-    console.log(`Projects cache refreshed successfully. ${projects.length} projects loaded.`);
+    console.log(`Projects cache refreshed successfully. ${projects.length} projects loaded (${total} total registered).`);
     return projects;
   } catch (error) {
     console.error("Error refreshing projects cache:", error);
@@ -183,6 +192,7 @@ export function getCacheStats() {
   return {
     hasCache: cachedProjects !== null,
     projectCount: cachedProjects?.length || 0,
+    totalProjectsRegistered: totalProjectsRegistered,
     cacheAge: cachedProjects ? Date.now() - cacheTimestamp : null,
     isRefreshing,
   };

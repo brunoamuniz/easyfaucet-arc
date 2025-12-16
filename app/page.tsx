@@ -546,20 +546,20 @@ export default function FaucetPage() {
             Destination address
           </Label>
           <div className="flex gap-2">
-            <Input
-              id="destination-address"
-              type="text"
-              placeholder="0x1234...ABCD"
-              value={destinationAddress}
-              onChange={(e) => setDestinationAddress(e.target.value)}
+          <Input
+            id="destination-address"
+            type="text"
+            placeholder="0x1234...ABCD"
+            value={destinationAddress}
+            onChange={(e) => setDestinationAddress(e.target.value)}
               className="flex-1"
-              style={{
-                background: "#1E293B",
-                borderColor: addressValidationError ? "#EF4444" : "#1E293B",
-                color: "#F9FAFB",
-              }}
-              aria-invalid={!!addressValidationError}
-            />
+            style={{
+              background: "#1E293B",
+              borderColor: addressValidationError ? "#EF4444" : "#1E293B",
+              color: "#F9FAFB",
+            }}
+            aria-invalid={!!addressValidationError}
+          />
             <Button
               onClick={handlePaste}
               type="button"
@@ -796,16 +796,16 @@ export default function FaucetPage() {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Card 1 - Available */}
-            {faucetBalance !== undefined && (
+        {faucetBalance !== undefined && (
               <div className="p-4 rounded-lg border" style={{ background: "#1E293B", borderColor: "#1E293B" }}>
                 <p className="text-xs mb-2" style={{ color: "#9CA3AF" }}>
                   Available
                 </p>
                 <p className="text-sm font-medium" style={{ color: "#F9FAFB" }}>
                   {Number(faucetBalance) / 1_000_000} {selectedToken} (testnet)
-                </p>
-              </div>
-            )}
+            </p>
+          </div>
+        )}
 
             {/* Card 2 - Claims Processed */}
             {totalClaims !== undefined && (
@@ -862,80 +862,80 @@ export default function FaucetPage() {
 
         {/* Tutorial Toggle Button */}
         <div className="mb-2">
-          <button
-            onClick={() => setIsTutorialExpanded(!isTutorialExpanded)}
-            aria-expanded={isTutorialExpanded}
+        <button
+          onClick={() => setIsTutorialExpanded(!isTutorialExpanded)}
+          aria-expanded={isTutorialExpanded}
             className="w-full text-xs text-center transition-colors hover:opacity-80 flex items-center justify-center gap-2"
-            style={{ color: "#9CA3AF" }}
-          >
-            <span>Do you need more faucets? You should follow this tutorial</span>
-            <ChevronDown
-              className={`w-4 h-4 transition-transform duration-300 ${isTutorialExpanded ? "rotate-180" : ""}`}
-            />
-          </button>
+          style={{ color: "#9CA3AF" }}
+        >
+          <span>Do you need more faucets? You should follow this tutorial</span>
+          <ChevronDown
+            className={`w-4 h-4 transition-transform duration-300 ${isTutorialExpanded ? "rotate-180" : ""}`}
+          />
+        </button>
 
-          {/* Tutorial Content */}
-          <div
-            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+        {/* Tutorial Content */}
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-in-out ${
               isTutorialExpanded ? "max-h-96 opacity-100 mt-2" : "max-h-0 opacity-0 mt-0"
-            }`}
+          }`}
+        >
+          <div
+            className="p-4 rounded-lg border space-y-3"
+            style={{ background: "#050B18", borderColor: "#1E293B" }}
           >
-            <div
-              className="p-4 rounded-lg border space-y-3"
-              style={{ background: "#050B18", borderColor: "#1E293B" }}
-            >
-              <ol className="space-y-3 text-sm" style={{ color: "#F9FAFB" }}>
-                <li className="flex flex-col gap-1">
-                  <span className="font-medium">
-                    1) <span style={{ color: "#9CA3AF" }}>Get assets on Sepolia:</span>
-                  </span>
-                  <a
-                    href="https://sepolia-faucet.pk910.de/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs break-all hover:underline transition-colors"
-                    style={{ color: "#2F2CFF" }}
-                  >
-                    https://sepolia-faucet.pk910.de/
-                  </a>
-                </li>
-                <li className="flex flex-col gap-1">
-                  <span className="font-medium">
-                    2) <span style={{ color: "#9CA3AF" }}>Swap the assets using Uniswap (Sepolia):</span>
-                  </span>
-                  <a
-                    href="https://app.uniswap.org/swap?chain=sepolia&inputCurrency=NATIVE&outputCurrency=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238&value=2.4&field=input"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs break-all hover:underline transition-colors"
-                    style={{ color: "#2F2CFF" }}
-                  >
-                    https://app.uniswap.org/swap?chain=sepolia&inputCurrency=NATIVE&outputCurrency=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238&value=2.4&field=input
-                  </a>
-                </li>
-                <li className="flex flex-col gap-1">
-                  <span className="font-medium">
-                    3) <span style={{ color: "#9CA3AF" }}>Bridge using Superbridge:</span>
-                  </span>
-                  <a
-                    href="https://superbridge.app/?fromChainId=11155111&toChainId=5042002"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs break-all hover:underline transition-colors"
-                    style={{ color: "#2F2CFF" }}
-                  >
-                    https://superbridge.app/?fromChainId=11155111&toChainId=5042002
-                  </a>
-                </li>
-              </ol>
-              <p className="text-xs mt-4 pt-3 border-t" style={{ color: "#9CA3AF", borderColor: "#1E293B" }}>
-                This process can take up to one hour to complete.
-              </p>
-            </div>
+            <ol className="space-y-3 text-sm" style={{ color: "#F9FAFB" }}>
+              <li className="flex flex-col gap-1">
+                <span className="font-medium">
+                  1) <span style={{ color: "#9CA3AF" }}>Get assets on Sepolia:</span>
+                </span>
+                <a
+                  href="https://sepolia-faucet.pk910.de/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs break-all hover:underline transition-colors"
+                  style={{ color: "#2F2CFF" }}
+                >
+                  https://sepolia-faucet.pk910.de/
+                </a>
+              </li>
+              <li className="flex flex-col gap-1">
+                <span className="font-medium">
+                  2) <span style={{ color: "#9CA3AF" }}>Swap the assets using Uniswap (Sepolia):</span>
+                </span>
+                <a
+                  href="https://app.uniswap.org/swap?chain=sepolia&inputCurrency=NATIVE&outputCurrency=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238&value=2.4&field=input"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs break-all hover:underline transition-colors"
+                  style={{ color: "#2F2CFF" }}
+                >
+                  https://app.uniswap.org/swap?chain=sepolia&inputCurrency=NATIVE&outputCurrency=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238&value=2.4&field=input
+                </a>
+              </li>
+              <li className="flex flex-col gap-1">
+                <span className="font-medium">
+                  3) <span style={{ color: "#9CA3AF" }}>Bridge using Superbridge:</span>
+                </span>
+                <a
+                  href="https://superbridge.app/?fromChainId=11155111&toChainId=5042002"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs break-all hover:underline transition-colors"
+                  style={{ color: "#2F2CFF" }}
+                >
+                  https://superbridge.app/?fromChainId=11155111&toChainId=5042002
+                </a>
+              </li>
+            </ol>
+            <p className="text-xs mt-4 pt-3 border-t" style={{ color: "#9CA3AF", borderColor: "#1E293B" }}>
+              This process can take up to one hour to complete.
+            </p>
           </div>
         </div>
+            </div>
       </Card>
-      </div>
+          </div>
 
       {/* Share on X Modal */}
       <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
@@ -974,10 +974,10 @@ export default function FaucetPage() {
               </p>
             </div>
             
-            <a
+                <a
               href={twitterShareUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+                  target="_blank"
+                  rel="noopener noreferrer"
               className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-all hover:opacity-90"
               style={{
                 background: "linear-gradient(90deg, #2F2CFF, #C035FF)",
@@ -1002,7 +1002,7 @@ export default function FaucetPage() {
             >
               Maybe later
             </button>
-          </div>
+        </div>
         </DialogContent>
       </Dialog>
 

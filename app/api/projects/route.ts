@@ -12,13 +12,23 @@ export async function GET() {
     const projects = await getCachedProjects();
     const stats = getCacheStats();
 
+    // Format cache age for better readability
+    const cacheAgeMs = stats.cacheAge || 0;
+    const cacheAgeMinutes = Math.floor(cacheAgeMs / 60000);
+    const cacheAgeSeconds = Math.floor((cacheAgeMs % 60000) / 1000);
+    const isStale = cacheAgeMs > 20 * 60 * 1000; // Consider stale if older than 20 minutes
+
     return NextResponse.json({
       success: true,
       data: projects,
       cached: true,
       stats: {
         projectCount: stats.projectCount,
+        totalProjectsRegistered: stats.totalProjectsRegistered,
         cacheAge: stats.cacheAge,
+        cacheAgeFormatted: `${cacheAgeMinutes}m ${cacheAgeSeconds}s`,
+        isStale,
+        lastRefresh: stats.cacheAge ? new Date(Date.now() - cacheAgeMs).toISOString() : null,
       },
     });
   } catch (error) {

@@ -5,7 +5,7 @@
  * The API route at /api/projects handles caching and data transformation.
  */
 
-export type ProjectCategory = "Tools" | "DeFi" | "Explorer" | "NFT" | "Bridge" | "Other";
+export type ProjectCategory = "Tools" | "DeFi" | "Explorer" | "NFT" | "Bridge" | "Gaming" | "Other";
 
 export interface Project {
   id: string;
