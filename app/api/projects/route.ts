@@ -4,7 +4,7 @@ import { getCachedProjects, getCacheStats } from "@/lib/services/projects-cache"
 /**
  * GET /api/projects
  * Returns cached projects (always fast, no fetch during request)
- * Cache is updated in background every 15 minutes
+ * Cache is updated by Vercel Cron Job every 15 minutes
  */
 export async function GET() {
   try {
