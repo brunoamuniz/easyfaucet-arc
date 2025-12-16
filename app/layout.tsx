@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { Providers } from "./providers"
+import { Analytics } from "@vercel/analytics/next"
 // Initialize projects cache refresh process
 import "@/lib/services/projects-cache-init"
 
@@ -90,6 +91,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`font-sans antialiased`}>
         <Providers>{children}</Providers>
+        <Analytics />
       </body>
     </html>
   )
