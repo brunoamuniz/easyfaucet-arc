@@ -5,6 +5,7 @@ import { WagmiProvider } from "wagmi";
 import { RainbowKitProvider, getDefaultConfig, darkTheme } from "@rainbow-me/rainbowkit";
 import { http } from "wagmi";
 import { arcTestnet } from "@/lib/config/chains";
+import { Toaster } from "@/components/ui/toaster";
 
 // Import RainbowKit styles
 import "@rainbow-me/rainbowkit/styles.css";
@@ -43,6 +44,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           })}
         >
           {children}
+          <Toaster />
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

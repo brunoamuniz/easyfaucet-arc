@@ -6,7 +6,8 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",
-    "start": "next start"
+    "start": "next start",
+    "refresh-projects": "node scripts/refresh-projects-cache.js"
   },
   "dependencies": {
     "@base-org/account": "^2.5.0",

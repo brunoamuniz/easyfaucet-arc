@@ -28,14 +28,14 @@ div[data-testid="rk-connect-button"] > button {
   margin: 0 auto !important;
 }
 
-/* Mobile responsive adjustments */
+/* Mobile responsive adjustments - align with card content (same width as title) */
 @media (max-width: 640px) {
   button[data-testid="rk-connect-button"],
   div[data-testid="rk-connect-button"] > button {
     max-width: 100% !important;
     width: 100% !important;
     min-width: 0 !important;
-    font-size: 14px !important;
+    font-size: 16px !important;
     padding: 0 16px !important;
   }
   

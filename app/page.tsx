@@ -16,6 +16,7 @@ import { FAUCET_CONTRACT_ADDRESS, ARC_TESTNET_CHAIN_ID, USDC_FAUCET_ADDRESS, EUR
 import { ARCTESTNET_FAUCET_ABI } from "@/lib/contracts/ArcTestnetFaucet.abi";
 import { decodeFaucetError, formatRemainingTime } from "@/lib/utils/errorDecoder";
 import { arcTestnet } from "@/lib/config/chains";
+import { ProjectsShowcase } from "@/components/projects-showcase";
 
 // App URL - defaults to production domain
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://easyfaucetarc.xyz";
@@ -494,7 +495,14 @@ export default function FaucetPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: "#020617" }}>
-      <Card className="w-full max-w-[560px] p-8 shadow-2xl" style={{ background: "#050B18", borderColor: "#1E293B" }}>
+      <div className="w-full max-w-[1200px] mx-auto flex flex-col lg:flex-row gap-8 items-start justify-center">
+        {/* Projects Showcase Section - Left side on desktop */}
+        <div className="w-full lg:w-auto lg:flex-shrink-0 lg:max-w-[560px] order-2 lg:order-1">
+          <ProjectsShowcase />
+        </div>
+
+        {/* Main Faucet Card - Right side on desktop */}
+        <Card className="w-full max-w-[560px] lg:flex-shrink-0 p-8 shadow-2xl order-1 lg:order-2" style={{ background: "#050B18", borderColor: "#1E293B" }}>
         {/* Header */}
         <div className="text-center space-y-4 mb-4">
           <div
@@ -927,6 +935,7 @@ export default function FaucetPage() {
           </div>
         </div>
       </Card>
+      </div>
 
       {/* Share on X Modal */}
       <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
@@ -997,7 +1006,7 @@ export default function FaucetPage() {
         </DialogContent>
       </Dialog>
 
-      <footer className="w-full max-w-[560px] mt-8 text-center space-y-4">
+      <footer className="w-full max-w-[1200px] mt-12 text-center space-y-4">
         <div className="flex items-center justify-center gap-6">
           <a
             href="https://github.com/brunoamuniz/easyfaucet-arc"
