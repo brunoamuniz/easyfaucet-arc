@@ -167,3 +167,4 @@ Após configurar as variáveis e fazer o deploy:
 - [ARC Testnet RPC](https://rpc.testnet.arc.network)
 - [WalletConnect Cloud](https://cloud.walletconnect.com/)
 - [Telegram Bot Setup](./TELEGRAM_SETUP.md)
+
