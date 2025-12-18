@@ -50,6 +50,93 @@ function getDeviceId(): string {
   return deviceId;
 }
 
+// Rate limiting: Maximum 20 claims per 24 hours per device (shared between USDC and EURC)
+const RATE_LIMIT_MAX_REQUESTS = 20;
+const RATE_LIMIT_WINDOW = 24 * 60 * 60 * 1000; // 24 hours
+
+// Check rate limit in localStorage (read-only, doesn't increment)
+// Shared between USDC and EURC - uses device ID
+function checkRateLimitLocal(): { allowed: boolean; remainingRequests: number; resetTime: number } {
+  if (typeof window === "undefined") {
+    return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS, resetTime: 0 };
+  }
+
+  const deviceId = getDeviceId();
+  // Shared key for both tokens
+  const key = `arc-faucet:rateLimit:${deviceId}`;
+  const stored = localStorage.getItem(key);
+
+  const now = Date.now();
+
+  if (!stored) {
+    // No record yet - user hasn't made any claims
+    return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS, resetTime: 0 };
+  }
+
+  try {
+    const record = JSON.parse(stored) as { count: number; resetTime: number };
+
+    // Check if window has expired
+    if (now > record.resetTime) {
+      // Window expired - reset available
+      return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS, resetTime: 0 };
+    }
+
+    // Check if limit exceeded
+    if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
+      return { 
+        allowed: false, 
+        remainingRequests: 0, 
+        resetTime: record.resetTime 
+      };
+    }
+
+    // Still within limit
+    return { 
+      allowed: true, 
+      remainingRequests: RATE_LIMIT_MAX_REQUESTS - record.count, 
+      resetTime: record.resetTime 
+    };
+  } catch (error) {
+    // If parsing fails, treat as no limit
+    return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS, resetTime: 0 };
+  }
+}
+
+// Increment rate limit counter (called after successful claim)
+// Shared between USDC and EURC
+function incrementRateLimit() {
+  if (typeof window === "undefined") return;
+  const deviceId = getDeviceId();
+  // Shared key for both tokens
+  const key = `arc-faucet:rateLimit:${deviceId}`;
+  const stored = localStorage.getItem(key);
+
+  if (!stored) {
+    const resetTime = Date.now() + RATE_LIMIT_WINDOW;
+    localStorage.setItem(key, JSON.stringify({ count: 1, resetTime }));
+    return;
+  }
+
+  try {
+    const record = JSON.parse(stored) as { count: number; resetTime: number };
+    const now = Date.now();
+
+    if (now > record.resetTime) {
+      // Reset window
+      const resetTime = now + RATE_LIMIT_WINDOW;
+      localStorage.setItem(key, JSON.stringify({ count: 1, resetTime }));
+    } else {
+      record.count++;
+      localStorage.setItem(key, JSON.stringify(record));
+    }
+  } catch (error) {
+    // If parsing fails, reset
+    const resetTime = Date.now() + RATE_LIMIT_WINDOW;
+    localStorage.setItem(key, JSON.stringify({ count: 1, resetTime }));
+  }
+}
+
 // Helper function to check cooldown (localStorage - extra layer)
 // Now includes token to allow independent cooldowns for USDC and EURC
 function checkLocalCooldown(address: string, token: "USDC" | "EURC"): { isInCooldown: boolean; remainingTime: number } {
@@ -105,6 +192,10 @@ export default function FaucetPage() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
+  
+  // Check if we're in development (client-side check)
+  const isDevelopment = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('localhost'));
 
   const [faucetStatus, setFaucetStatus] = useState<FaucetStatus>("idle");
   const [txHash, setTxHash] = useState<string>("");
@@ -118,6 +209,7 @@ export default function FaucetPage() {
   const [selectedToken, setSelectedToken] = useState<"USDC" | "EURC">("USDC");
   const [showSuccessAnimation, setShowSuccessAnimation] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
+  const [rateLimitInfo, setRateLimitInfo] = useState<{ remainingRequests: number; resetTime: number } | null>(null);
 
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== ARC_TESTNET_CHAIN_ID;
@@ -139,6 +231,30 @@ export default function FaucetPage() {
       setAddressValidationError("");
     }
   }, [isConnected, address, destinationAddress]);
+
+  // Check rate limit on mount and periodically
+  useEffect(() => {
+    const updateRateLimit = () => {
+      try {
+        const rateLimit = checkRateLimitLocal();
+        setRateLimitInfo({
+          remainingRequests: rateLimit.remainingRequests,
+          resetTime: rateLimit.resetTime,
+        });
+      } catch (error) {
+        // Silently handle errors - don't break the app
+        console.error("Error updating rate limit:", error);
+      }
+    };
+
+    // Initial check
+    updateRateLimit();
+
+    // Update every minute
+    const interval = setInterval(updateRateLimit, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Clear success status when destination address or wallet changes
   useEffect(() => {
@@ -372,6 +488,19 @@ export default function FaucetPage() {
       return;
     }
 
+    // Check rate limit before making request
+    const rateLimitCheck = checkRateLimitLocal();
+    if (!rateLimitCheck.allowed) {
+      const hoursUntilReset = Math.ceil((rateLimitCheck.resetTime - Date.now()) / (1000 * 60 * 60));
+      setErrorMessage(`Rate limit exceeded. Maximum 20 claims per 24 hours (shared between USDC and EURC). Please try again in ${hoursUntilReset} hour(s).`);
+      setFaucetStatus("error");
+      setRateLimitInfo({
+        remainingRequests: 0,
+        resetTime: rateLimitCheck.resetTime,
+      });
+      return;
+    }
+
     try {
       // Set loading state immediately
       setIsClaiming(true);
@@ -409,6 +538,18 @@ export default function FaucetPage() {
         setFaucetStatus("error");
         setErrorTimestamp(Date.now());
         
+        // Handle rate limit error (429)
+        if (response.status === 429) {
+          const hoursUntilReset = data.hoursUntilReset || Math.ceil((data.resetTime - Date.now()) / (1000 * 60 * 60));
+          setErrorMessage(`Rate limit exceeded. Maximum 20 claims per 24 hours (shared between USDC and EURC). Please try again in ${hoursUntilReset} hour(s).`);
+          setRateLimitInfo({
+            remainingRequests: data.remainingRequests || 0,
+            resetTime: data.resetTime || Date.now() + 24 * 60 * 60 * 1000,
+          });
+          setIsClaiming(false);
+          return;
+        }
+        
         // Handle cooldown specifically
         if (data.remainingSeconds) {
           setRemainingCooldownSeconds(data.remainingSeconds);
@@ -430,6 +571,14 @@ export default function FaucetPage() {
       setFaucetStatus("success");
       setErrorTimestamp(0); // Clear any error timestamp
       setErrorMessage(""); // Clear any error message
+      
+      // Increment rate limit counter (shared between USDC and EURC)
+      incrementRateLimit();
+      const updatedRateLimit = checkRateLimitLocal();
+      setRateLimitInfo({
+        remainingRequests: updatedRateLimit.remainingRequests,
+        resetTime: updatedRateLimit.resetTime,
+      });
       
       // Trigger success animation
       setShowSuccessAnimation(true);
@@ -478,7 +627,8 @@ export default function FaucetPage() {
     faucetStatus === "paused" ||
     paused === true ||
     (canClaimResult !== null && canClaimResult !== undefined && !canClaimResult.allowed) ||
-    !!addressValidationError;
+    !!addressValidationError ||
+    (rateLimitInfo !== null && rateLimitInfo.remainingRequests === 0);
 
   const explorerUrl = `${arcTestnet.blockExplorers?.default.url}/tx/${txHash}`;
 
@@ -672,6 +822,32 @@ export default function FaucetPage() {
         {/* Alerts */}
         <div className="space-y-3">
 
+          {/* Rate Limit Warning */}
+          {rateLimitInfo !== null && rateLimitInfo.remainingRequests === 0 && (
+            <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
+              <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
+              <AlertTitle style={{ color: "#EF4444" }}>Rate limit exceeded</AlertTitle>
+              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
+                You have reached the maximum of 20 claims per 24 hours (shared between USDC and EURC).
+                {rateLimitInfo.resetTime > Date.now() && (
+                  <span className="block mt-1">
+                    Please try again in {Math.ceil((rateLimitInfo.resetTime - Date.now()) / (1000 * 60 * 60))} hour(s).
+                  </span>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {rateLimitInfo !== null && rateLimitInfo.remainingRequests > 0 && rateLimitInfo.remainingRequests <= 5 && (
+            <Alert className="border" style={{ background: "#050B18", borderColor: "#F59E0B" }}>
+              <AlertCircle className="h-4 w-4" style={{ color: "#F59E0B" }} />
+              <AlertTitle style={{ color: "#F59E0B" }}>Rate limit warning</AlertTitle>
+              <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
+                You have {rateLimitInfo.remainingRequests} request{rateLimitInfo.remainingRequests === 1 ? "" : "s"} remaining in the next 24 hours (shared between USDC and EURC).
+              </AlertDescription>
+            </Alert>
+          )}
+
           {faucetStatus === "paused" && (
             <Alert className="border" style={{ background: "#050B18", borderColor: "#EF4444" }}>
               <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
@@ -794,7 +970,7 @@ export default function FaucetPage() {
           <h3 className="text-sm font-semibold mb-3" style={{ color: "#F9FAFB" }}>
             Faucet Stats
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Card 1 - Available */}
         {faucetBalance !== undefined && (
               <div className="p-4 rounded-lg border" style={{ background: "#1E293B", borderColor: "#1E293B" }}>
@@ -816,6 +992,25 @@ export default function FaucetPage() {
                 <p className="text-sm font-medium" style={{ color: "#F9FAFB" }}>
                   <span style={{ color: "#22C55E", fontWeight: "600" }}>
                     {typeof totalClaims === "bigint" ? totalClaims.toString() : totalClaims || "0"}
+                  </span>
+                </p>
+              </div>
+            )}
+
+            {/* Card 3 - Requests Remaining (Rate Limit) - Only in development */}
+            {isDevelopment && rateLimitInfo !== null && (
+              <div className="p-4 rounded-lg border" style={{ 
+                background: "#1E293B", 
+                borderColor: rateLimitInfo.remainingRequests === 0 ? "#EF4444" : rateLimitInfo.remainingRequests <= 5 ? "#F59E0B" : "#1E293B"
+              }}>
+                <p className="text-xs mb-2" style={{ color: "#9CA3AF" }}>
+                  Remaining (24h)
+                </p>
+                <p className="text-sm font-medium" style={{ 
+                  color: rateLimitInfo.remainingRequests === 0 ? "#EF4444" : rateLimitInfo.remainingRequests <= 5 ? "#F59E0B" : "#F9FAFB"
+                }}>
+                  <span style={{ fontWeight: "600" }}>
+                    {rateLimitInfo.remainingRequests} / {RATE_LIMIT_MAX_REQUESTS}
                   </span>
                 </p>
               </div>
