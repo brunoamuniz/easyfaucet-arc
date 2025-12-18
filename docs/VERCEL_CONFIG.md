@@ -35,7 +35,7 @@
 - **Onde obter**: 
   - Vercel → Project → Storage → Redis
   - Ou Redis Labs (se configurado externamente)
-- **Exemplo**: `redis://default:UpML4OHynDdLIQqm7tCr87ZY0yXmHukw@redis-15083.c10.us-east-1-2.ec2.cloud.redislabs.com:15083`
+- **Exemplo**: `redis://default:your_password_here@your-redis-host.com:15083`
 
 ### Opcionais (mas recomendadas)
 
