@@ -192,10 +192,6 @@ export default function FaucetPage() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
-  
-  // Check if we're in development (client-side check)
-  const isDevelopment = typeof window !== 'undefined' && 
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('localhost'));
 
   const [faucetStatus, setFaucetStatus] = useState<FaucetStatus>("idle");
   const [txHash, setTxHash] = useState<string>("");
@@ -970,7 +966,7 @@ export default function FaucetPage() {
           <h3 className="text-sm font-semibold mb-3" style={{ color: "#F9FAFB" }}>
             Faucet Stats
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Card 1 - Available */}
         {faucetBalance !== undefined && (
               <div className="p-4 rounded-lg border" style={{ background: "#1E293B", borderColor: "#1E293B" }}>
@@ -992,25 +988,6 @@ export default function FaucetPage() {
                 <p className="text-sm font-medium" style={{ color: "#F9FAFB" }}>
                   <span style={{ color: "#22C55E", fontWeight: "600" }}>
                     {typeof totalClaims === "bigint" ? totalClaims.toString() : totalClaims || "0"}
-                  </span>
-                </p>
-              </div>
-            )}
-
-            {/* Card 3 - Requests Remaining (Rate Limit) - Only in development */}
-            {isDevelopment && rateLimitInfo !== null && (
-              <div className="p-4 rounded-lg border" style={{ 
-                background: "#1E293B", 
-                borderColor: rateLimitInfo.remainingRequests === 0 ? "#EF4444" : rateLimitInfo.remainingRequests <= 5 ? "#F59E0B" : "#1E293B"
-              }}>
-                <p className="text-xs mb-2" style={{ color: "#9CA3AF" }}>
-                  Remaining (24h)
-                </p>
-                <p className="text-sm font-medium" style={{ 
-                  color: rateLimitInfo.remainingRequests === 0 ? "#EF4444" : rateLimitInfo.remainingRequests <= 5 ? "#F59E0B" : "#F9FAFB"
-                }}>
-                  <span style={{ fontWeight: "600" }}>
-                    {rateLimitInfo.remainingRequests} / {RATE_LIMIT_MAX_REQUESTS}
                   </span>
                 </p>
               </div>
