@@ -140,7 +140,7 @@ easyfaucet-arc/
 │   └── utils/
 │       └── errorDecoder.ts       # Error decoding utilities
 ├── public/                       # Static assets
-├── docs/                         # Documentation
+├── docs/                         # Documentation (local only, not in git)
 └── tests/                        # E2E tests (Playwright)
 ```
 
@@ -293,9 +293,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you encounter any issues or have questions:
 
-1. Check the [documentation](./docs/)
+1. Check the README.md and code comments
 2. Open an issue on GitHub
-3. Review the [implementation status](./docs/IMPLEMENTATION_STATUS.md)
+3. Review the project structure and implementation
 
 ## 🎯 Roadmap
 
