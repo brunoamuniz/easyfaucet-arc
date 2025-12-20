@@ -989,6 +989,18 @@ export default function FaucetPage() {
                   <span style={{ color: "#22C55E", fontWeight: "600" }}>
                     {typeof totalClaims === "bigint" ? totalClaims.toString() : totalClaims || "0"}
                   </span>
+                  {(() => {
+                    const claims = typeof totalClaims === "bigint" ? Number(totalClaims) : (totalClaims || 0);
+                    const claimAmount = CLAIM_AMOUNTS[selectedToken];
+                    const totalDistributed = claims * claimAmount;
+                    // Format large numbers with commas
+                    const formattedTotal = totalDistributed.toLocaleString('en-US');
+                    return (
+                      <span style={{ color: "#9CA3AF", fontWeight: "400", marginLeft: "4px" }}>
+                        ({formattedTotal} {selectedToken})
+                      </span>
+                    );
+                  })()}
                 </p>
               </div>
             )}
