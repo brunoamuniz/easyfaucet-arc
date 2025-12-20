@@ -51,6 +51,18 @@ lib/openzeppelin-contracts/
 # Sensitive deployment files
 /scripts
 
+# Circle StableFX scripts and configs (sensitive)
+docs/STABLEFX_PERMISSIONS.md
+tsconfig.scripts.json
+
+# Auto-refill script (sensitive - contains private key usage)
+scripts/auto-refill-faucets.py
+scripts/AUTO_REFILL_README.md
+
+# Logs directory
+logs/
+*.log
+
 # Vercel
 .vercel
 
