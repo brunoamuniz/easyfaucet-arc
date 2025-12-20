@@ -295,7 +295,7 @@ If you encounter any issues or have questions:
 
 1. Check the [documentation](./docs/)
 2. Open an issue on GitHub
-3. Review the [implementation status](./IMPLEMENTATION_STATUS.md)
+3. Review the [implementation status](./docs/IMPLEMENTATION_STATUS.md)
 
 ## 🎯 Roadmap
 

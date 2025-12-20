@@ -41,11 +41,25 @@ if (process.env.REDIS_URL) {
   });
   
   // Pre-connect to Redis immediately (connection is reused in serverless)
-  console.log("Connecting to Redis...");
+  console.log("[REDIS] Initializing connection...");
+  console.log("[REDIS] REDIS_URL configured:", !!process.env.REDIS_URL);
+  console.log("[REDIS] REDIS_URL format:", process.env.REDIS_URL ? `${process.env.REDIS_URL.substring(0, 20)}...` : "not set");
+  
   redisConnectionPromise = redis.connect().then(() => {
-    console.log("✅ Redis pre-connected successfully");
-  }).catch((err) => {
-    console.error("❌ Failed to pre-connect to Redis:", err);
+    console.log("[REDIS] ✅ Pre-connected successfully");
+    console.log("[REDIS] Connection state:", {
+      isOpen: redis.isOpen,
+      isReady: redis.isReady,
+    });
+  }).catch((err: any) => {
+    console.error("[REDIS] ❌ Failed to pre-connect:", err?.message || err);
+    console.error("[REDIS] Error details:", {
+      code: err?.code,
+      errno: err?.errno,
+      syscall: err?.syscall,
+      address: err?.address,
+      port: err?.port,
+    });
     redisConnectionPromise = null;
   });
 } else {
@@ -68,21 +82,33 @@ async function checkRateLimit(ip: string): Promise<{ allowed: boolean; remaining
   // Ensure connection is open (wait for initial connection if needed)
   try {
     if (redisConnectionPromise) {
+      console.log("[RATE_LIMIT] Waiting for initial Redis connection promise...");
       await Promise.race([
         redisConnectionPromise,
         new Promise((_, reject) => setTimeout(() => reject(new Error("Redis connection timeout")), 3000))
       ]);
+      console.log("[RATE_LIMIT] Initial connection promise resolved");
     }
     
     if (!redis.isOpen) {
+      console.log("[RATE_LIMIT] Redis not open, attempting to connect...");
       await Promise.race([
         redis.connect(),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Redis connection timeout")), 3000))
       ]);
+      console.log("[RATE_LIMIT] ✅ Redis connection established");
+    } else {
+      console.log("[RATE_LIMIT] Redis already open");
     }
-  } catch (error) {
-    console.error("Redis connection error in checkRateLimit:", error);
+  } catch (error: any) {
+    console.error("[RATE_LIMIT] ❌ Redis connection error:", error?.message || error);
+    console.error("[RATE_LIMIT] Redis state:", {
+      isOpen: redis?.isOpen,
+      isReady: redis?.isReady,
+      hasConnectionPromise: !!redisConnectionPromise,
+    });
     // Fail open - allow request if Redis is unavailable (but log the error)
+    // TODO: Consider changing to fail-closed for production security
     const resetTime = Date.now() + (RATE_LIMIT_WINDOW * 1000);
     return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS, resetTime };
   }
@@ -90,13 +116,20 @@ async function checkRateLimit(ip: string): Promise<{ allowed: boolean; remaining
   const key = `rate-limit:${ip}`;
   let recordStr: string | null = null;
   try {
+    console.log(`[RATE_LIMIT] Checking key: ${key}`);
     recordStr = await Promise.race([
       redis.get(key) as Promise<string | null>,
       new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Redis get timeout")), 2000))
     ]) as string | null;
-  } catch (error) {
-    console.error("Redis get error:", error);
+    console.log(`[RATE_LIMIT] Redis get result for ${ip}:`, recordStr ? "found" : "not found");
+  } catch (error: any) {
+    console.error("[RATE_LIMIT] ❌ Redis get error:", error?.message || error);
+    console.error("[RATE_LIMIT] Redis state during get:", {
+      isOpen: redis?.isOpen,
+      isReady: redis?.isReady,
+    });
     // Fail open - allow request if Redis read fails
+    // TODO: Consider changing to fail-closed for production security
     const resetTime = Date.now() + (RATE_LIMIT_WINDOW * 1000);
     return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS, resetTime };
   }
@@ -142,6 +175,7 @@ async function incrementRateLimit(ip: string): Promise<void> {
   // Ensure connection is open (wait for initial connection if needed)
   try {
     if (redisConnectionPromise) {
+      console.log("[RATE_LIMIT_INCREMENT] Waiting for initial Redis connection promise...");
       await Promise.race([
         redisConnectionPromise,
         new Promise((_, reject) => setTimeout(() => reject(new Error("Redis connection timeout")), 3000))
@@ -149,25 +183,37 @@ async function incrementRateLimit(ip: string): Promise<void> {
     }
     
     if (!redis.isOpen) {
+      console.log("[RATE_LIMIT_INCREMENT] Redis not open, attempting to connect...");
       await Promise.race([
         redis.connect(),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Redis connection timeout")), 3000))
       ]);
+      console.log("[RATE_LIMIT_INCREMENT] ✅ Redis connection established");
     }
-  } catch (error) {
-    console.error("Redis connection error in incrementRateLimit:", error);
+  } catch (error: any) {
+    console.error("[RATE_LIMIT_INCREMENT] ❌ Redis connection error:", error?.message || error);
+    console.error("[RATE_LIMIT_INCREMENT] Redis state:", {
+      isOpen: redis?.isOpen,
+      isReady: redis?.isReady,
+    });
     return; // Fail silently - don't break the claim if Redis is unavailable
   }
 
   const key = `rate-limit:${ip}`;
   let recordStr: string | null = null;
   try {
+    console.log(`[RATE_LIMIT_INCREMENT] Getting record for key: ${key}`);
     recordStr = await Promise.race([
       redis.get(key) as Promise<string | null>,
       new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Redis get timeout")), 2000))
     ]) as string | null;
-  } catch (error) {
-    console.error("Redis get error in incrementRateLimit:", error);
+    console.log(`[RATE_LIMIT_INCREMENT] Redis get result:`, recordStr ? "found" : "not found");
+  } catch (error: any) {
+    console.error("[RATE_LIMIT_INCREMENT] ❌ Redis get error:", error?.message || error);
+    console.error("[RATE_LIMIT_INCREMENT] Redis state:", {
+      isOpen: redis?.isOpen,
+      isReady: redis?.isReady,
+    });
     return; // Fail silently
   }
   
@@ -178,21 +224,29 @@ async function incrementRateLimit(ip: string): Promise<void> {
     if (!record || now > record.resetTime) {
       // Reset window - new 24h period
       const resetTime = now + (RATE_LIMIT_WINDOW * 1000);
+      console.log(`[RATE_LIMIT_INCREMENT] Creating new record for ${ip}: count=1`);
       await Promise.race([
         redis.setEx(key, RATE_LIMIT_WINDOW, JSON.stringify({ count: 1, resetTime })),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Redis setEx timeout")), 2000))
       ]);
+      console.log(`[RATE_LIMIT_INCREMENT] ✅ Record created for ${ip}`);
       return;
     }
 
     // Increment count
     record.count++;
+    console.log(`[RATE_LIMIT_INCREMENT] Incrementing record for ${ip}: count=${record.count}`);
     await Promise.race([
       redis.setEx(key, RATE_LIMIT_WINDOW, JSON.stringify(record)),
       new Promise((_, reject) => setTimeout(() => reject(new Error("Redis setEx timeout")), 2000))
     ]);
-  } catch (error) {
-    console.error("Redis setEx error in incrementRateLimit:", error);
+    console.log(`[RATE_LIMIT_INCREMENT] ✅ Record updated for ${ip}: count=${record.count}`);
+  } catch (error: any) {
+    console.error("[RATE_LIMIT_INCREMENT] ❌ Redis setEx error:", error?.message || error);
+    console.error("[RATE_LIMIT_INCREMENT] Redis state:", {
+      isOpen: redis?.isOpen,
+      isReady: redis?.isReady,
+    });
     // Fail silently - don't break the claim
   }
 }
