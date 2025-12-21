@@ -41,16 +41,17 @@ export async function checkUSDCBalance(
   // Fallback RPC URLs for Sepolia (public RPCs)
   // Using multiple public RPCs for better reliability
   // Order: Try faster/more reliable RPCs first
+  // Remove duplicates and prioritize working RPCs
   const sepoliaFallbackRPCs = [
     rpcUrl, // Primary RPC (from env or default)
     "https://ethereum-sepolia-rpc.publicnode.com", // PublicNode - usually faster
     "https://sepolia.gateway.tenderly.co", // Tenderly - reliable
     "https://rpc2.sepolia.org", // Sepolia official RPC #2
-    "https://rpc.sepolia.org", // Sepolia official RPC #1 (often slow)
     "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161", // Public Infura endpoint
     "https://eth-sepolia.g.alchemy.com/v2/demo", // Alchemy public endpoint
     "https://sepolia.drpc.org", // dRPC - additional fallback
-  ];
+    "https://rpc.sepolia.org", // Sepolia official RPC #1 (often slow, try last)
+  ].filter((url, index, self) => self.indexOf(url) === index); // Remove duplicates
 
   // Fallback RPC URLs for ARC Testnet
   const arcFallbackRPCs = [
