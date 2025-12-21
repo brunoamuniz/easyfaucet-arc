@@ -31,46 +31,98 @@ interface BalanceCheckResult {
 
 /**
  * Check USDC balance on a specific chain
+ * Includes retry logic and fallback RPC URLs for reliability
  */
 export async function checkUSDCBalance(
   chainId: number,
   address: string,
   rpcUrl: string
 ): Promise<BalanceCheckResult> {
-  try {
-    const publicClient = createPublicClient({
-      chain: chainId === 11155111 ? sepolia : arcTestnet,
-      transport: http(rpcUrl),
-    });
+  // Fallback RPC URLs for Sepolia (public RPCs)
+  const sepoliaFallbackRPCs = [
+    rpcUrl, // Primary RPC (from env or default)
+    "https://rpc.sepolia.org",
+    "https://ethereum-sepolia-rpc.publicnode.com",
+    "https://sepolia.gateway.tenderly.co",
+    "https://rpc2.sepolia.org",
+  ];
 
-    // USDC addresses on different chains
-    const usdcAddress =
-      chainId === 11155111
-        ? "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" // Sepolia USDC
-        : USDC_TESTNET_ADDRESS; // ARC Testnet USDC
+  // Fallback RPC URLs for ARC Testnet
+  const arcFallbackRPCs = [
+    rpcUrl, // Primary RPC (from env or default)
+    "https://rpc.testnet.arc.network",
+  ];
 
-    const balance = await publicClient.readContract({
-      address: usdcAddress as `0x${string}`,
-      abi: ERC20_ABI,
-      functionName: "balanceOf",
-      args: [address as `0x${string}`],
-    });
+  const rpcUrls = chainId === 11155111 ? sepoliaFallbackRPCs : arcFallbackRPCs;
+  const usdcAddress =
+    chainId === 11155111
+      ? "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" // Sepolia USDC
+      : USDC_TESTNET_ADDRESS; // ARC Testnet USDC
 
-    const balanceFormatted = (Number(balance) / 1_000_000).toFixed(2);
+  let lastError: any = null;
 
-    return {
-      balance: balance as bigint,
-      balanceFormatted,
-      hasEnough: balance > BigInt(0),
-    };
-  } catch (error: any) {
-    console.error(`[BRIDGE] Error checking balance on chain ${chainId}:`, error);
-    return {
-      balance: BigInt(0),
-      balanceFormatted: "0",
-      hasEnough: false,
-    };
+  // Try each RPC URL with retry logic
+  for (let i = 0; i < rpcUrls.length; i++) {
+    const currentRpcUrl = rpcUrls[i];
+    try {
+      console.log(`[BRIDGE] Attempting balance check (${i + 1}/${rpcUrls.length}) with RPC: ${currentRpcUrl.substring(0, 50)}...`);
+      
+      const publicClient = createPublicClient({
+        chain: chainId === 11155111 ? sepolia : arcTestnet,
+        transport: http(currentRpcUrl, {
+          timeout: 10000, // 10 seconds timeout per request
+          retryCount: 1, // Retry once per RPC
+          retryDelay: 500, // 500ms between retries
+        }),
+      });
+
+      const balance = await publicClient.readContract({
+        address: usdcAddress as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "balanceOf",
+        args: [address as `0x${string}`],
+      });
+
+      const balanceFormatted = (Number(balance) / 1_000_000).toFixed(2);
+      console.log(`[BRIDGE] ✅ Balance check successful with RPC: ${currentRpcUrl.substring(0, 50)}...`);
+      console.log(`[BRIDGE] Balance: ${balanceFormatted} USDC (raw: ${balance.toString()})`);
+
+      return {
+        balance: balance as bigint,
+        balanceFormatted,
+        hasEnough: balance > BigInt(0),
+      };
+    } catch (error: any) {
+      const errorMsg = error?.message || error?.shortMessage || String(error);
+      console.error(`[BRIDGE] ❌ RPC failed (${i + 1}/${rpcUrls.length}): ${currentRpcUrl.substring(0, 50)}...`);
+      console.error(`[BRIDGE] Error: ${errorMsg.substring(0, 100)}`);
+      lastError = error;
+      
+      // If it's the last RPC URL, return error result instead of throwing
+      if (i === rpcUrls.length - 1) {
+        console.error(`[BRIDGE] ❌ All ${rpcUrls.length} RPC URLs failed for chain ${chainId}`);
+        console.error(`[BRIDGE] Last error: ${errorMsg.substring(0, 200)}`);
+        // Return zero balance instead of throwing to allow the process to continue
+        // The bridge will be skipped but won't crash the cron job
+        return {
+          balance: BigInt(0),
+          balanceFormatted: "0",
+          hasEnough: false,
+        };
+      }
+      
+      // Try next RPC URL
+      console.log(`[BRIDGE] Retrying with next RPC URL...`);
+    }
   }
+
+  // Fallback: return zero balance if all RPCs failed
+  console.error(`[BRIDGE] ❌ All RPC attempts exhausted. Returning zero balance.`);
+  return {
+    balance: BigInt(0),
+    balanceFormatted: "0",
+    hasEnough: false,
+  };
 }
 
 /**
