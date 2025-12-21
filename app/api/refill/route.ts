@@ -10,6 +10,8 @@ import {
 } from "@/lib/config/faucet";
 import { ARCTESTNET_FAUCET_ABI } from "@/lib/contracts/ArcTestnetFaucet.abi";
 import { ERC20_ABI } from "@/lib/contracts/ERC20.abi";
+import { autoBridgeIfNeeded } from "@/lib/services/bridge-service";
+import { BRIDGE_CONFIG } from "@/lib/config/bridge";
 
 // Thresholds (configuráveis via env, defaults do script Python)
 const USDC_THRESHOLD = BigInt(process.env.USDC_THRESHOLD || "4000") * BigInt(1_000_000);
@@ -28,6 +30,10 @@ interface RefillResult {
   walletBalanceFormatted?: string;
   txHash?: string;
   error?: string;
+  bridgeAttempted?: boolean;
+  bridgeSuccess?: boolean;
+  bridgeTxHash?: string;
+  bridgeError?: string;
 }
 
 interface RefillResponse {
@@ -188,10 +194,52 @@ export async function GET(request: NextRequest) {
             throw new Error("Transaction failed");
           }
         } else {
-          const error = `Insufficient wallet balance. Need ${Number(USDC_REFILL_AMOUNT) / 1_000_000} USDC, have ${response.usdc.walletBalanceFormatted}`;
-          response.usdc.error = error;
-          response.errors.push(`USDC: ${error}`);
-          console.error(`[REFILL] ❌ ${error}`);
+          // Wallet doesn't have enough - try bridge if enabled
+          if (BRIDGE_CONFIG.enabled) {
+            console.log(`[REFILL] Insufficient balance on ARC Testnet. Attempting bridge from Sepolia...`);
+            response.usdc.bridgeAttempted = true;
+
+            try {
+              const bridgeResult = await autoBridgeIfNeeded(
+                USDC_REFILL_AMOUNT,
+                account.address,
+                privateKey
+              );
+
+              response.usdc.bridgeSuccess = bridgeResult.success;
+              response.usdc.bridgeTxHash = bridgeResult.transactionHash;
+              response.usdc.bridgeError = bridgeResult.error;
+
+              if (bridgeResult.success) {
+                console.log(`[REFILL] ✅ Bridge initiated successfully`);
+                console.log(`[REFILL] Bridge TX: ${bridgeResult.transactionHash}`);
+                console.log(`[REFILL] ⚠️ Note: Bridge can take 5-15 minutes to complete`);
+                console.log(`[REFILL] ⚠️ Refill will be retried in next cron run after bridge completes`);
+
+                // Don't attempt transfer yet - bridge needs time
+                response.usdc.error = `Bridge initiated. Will retry refill after bridge completes (TX: ${bridgeResult.transactionHash})`;
+                response.errors.push(`USDC: Bridge initiated, waiting for completion`);
+              } else {
+                const error = `Bridge failed: ${bridgeResult.error || "Unknown error"}`;
+                response.usdc.error = error;
+                response.usdc.bridgeError = bridgeResult.error;
+                response.errors.push(`USDC: ${error}`);
+                console.error(`[REFILL] ❌ ${error}`);
+              }
+            } catch (bridgeError: any) {
+              const error = `Bridge error: ${bridgeError.message || "Unknown error"}`;
+              response.usdc.error = error;
+              response.usdc.bridgeError = bridgeError.message;
+              response.errors.push(`USDC: ${error}`);
+              console.error(`[REFILL] ❌ ${error}`, bridgeError);
+            }
+          } else {
+            // Bridge disabled - return error
+            const error = `Insufficient wallet balance. Need ${Number(USDC_REFILL_AMOUNT) / 1_000_000} USDC, have ${response.usdc.walletBalanceFormatted}. Bridge is disabled.`;
+            response.usdc.error = error;
+            response.errors.push(`USDC: ${error}`);
+            console.error(`[REFILL] ❌ ${error}`);
+          }
         }
       } else {
         console.log(`[REFILL] USDC balance above threshold, no refill needed`);
