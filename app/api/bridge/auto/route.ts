@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { privateKeyToAccount } from "viem/accounts";
 import { checkUSDCBalance, bridgeUSDC } from "@/lib/services/bridge-service";
 import { BRIDGE_CONFIG } from "@/lib/config/bridge";
+import { sendTelegramMessage, formatBridgeStartMessage, formatBridgeCompleteMessage } from "@/lib/services/telegram-bot";
 
 /**
  * GET /api/bridge/auto
@@ -180,6 +181,20 @@ export async function GET(request: NextRequest) {
     console.log(`[BRIDGE_AUTO:${requestId}] Recipient: ${walletAddress}`);
     console.log(`[BRIDGE_AUTO:${requestId}] ========================================`);
 
+    // Send Telegram notification: Bridge starting
+    sendTelegramMessage({
+      text: formatBridgeStartMessage(
+        bridgeAmountFormatted,
+        "Ethereum_Sepolia",
+        "Arc_Testnet",
+        sepoliaBalance.balanceFormatted,
+        arcBalance.balanceFormatted,
+        walletAddress
+      ),
+    }, `BRIDGE_AUTO:${requestId}`).catch((err) => {
+      console.error(`[BRIDGE_AUTO:${requestId}] Failed to send Telegram notification (bridge start):`, err?.message || err);
+    });
+
     // Execute bridge
     let bridgeResult;
     try {
@@ -218,6 +233,20 @@ export async function GET(request: NextRequest) {
       console.error(`[BRIDGE_AUTO:${requestId}] Error: ${bridgeResult.error}`);
       console.error(`[BRIDGE_AUTO:${requestId}] Message: ${bridgeResult.message}`);
       
+      // Send Telegram notification: Bridge failed
+      sendTelegramMessage({
+        text: formatBridgeCompleteMessage(
+          bridgeAmountFormatted,
+          bridgeResult.fromChain || "Ethereum_Sepolia",
+          bridgeResult.toChain || "Arc_Testnet",
+          bridgeResult.transactionHash || "N/A",
+          false,
+          bridgeResult.error || bridgeResult.message
+        ),
+      }, `BRIDGE_AUTO:${requestId}`).catch((err) => {
+        console.error(`[BRIDGE_AUTO:${requestId}] Failed to send Telegram notification (bridge error):`, err?.message || err);
+      });
+      
       return NextResponse.json(
         {
           success: false,
@@ -244,6 +273,23 @@ export async function GET(request: NextRequest) {
     console.log(`[BRIDGE_AUTO:${requestId}] To: ${bridgeResult.toChain}`);
     console.log(`[BRIDGE_AUTO:${requestId}] Note: Bridge can take 5-15 minutes to complete`);
     console.log(`[BRIDGE_AUTO:${requestId}] ========================================`);
+
+    // Send Telegram notification: Bridge completed (initiated successfully)
+    // Note: The actual bridge completion on-chain takes 5-15 minutes
+    // This notification indicates the bridge transaction was submitted successfully
+    sendTelegramMessage({
+      text: formatBridgeCompleteMessage(
+        bridgeAmountFormatted,
+        bridgeResult.fromChain || "Ethereum_Sepolia",
+        bridgeResult.toChain || "Arc_Testnet",
+        bridgeResult.transactionHash || "N/A",
+        true,
+        undefined,
+        arcBalance.balanceFormatted // Current balance (will update after bridge completes)
+      ),
+    }, `BRIDGE_AUTO:${requestId}`).catch((err) => {
+      console.error(`[BRIDGE_AUTO:${requestId}] Failed to send Telegram notification (bridge complete):`, err?.message || err);
+    });
 
     return NextResponse.json({
       success: true,

@@ -12,6 +12,7 @@ import { ARCTESTNET_FAUCET_ABI } from "@/lib/contracts/ArcTestnetFaucet.abi";
 import { ERC20_ABI } from "@/lib/contracts/ERC20.abi";
 import { autoBridgeIfNeeded } from "@/lib/services/bridge-service";
 import { BRIDGE_CONFIG } from "@/lib/config/bridge";
+import { sendTelegramMessage, formatRefillStartMessage, formatRefillCompleteMessage } from "@/lib/services/telegram-bot";
 
 // Thresholds (configuráveis via env, defaults do script Python)
 const USDC_THRESHOLD = BigInt(process.env.USDC_THRESHOLD || "4000") * BigInt(1_000_000);
@@ -158,6 +159,20 @@ export async function GET(request: NextRequest) {
         if (walletBalance >= USDC_REFILL_AMOUNT) {
           console.log(`[REFILL] Refilling USDC with ${Number(USDC_REFILL_AMOUNT) / 1_000_000} USDC...`);
 
+          // Send Telegram notification: Refill starting
+          const refillAmount = (Number(USDC_REFILL_AMOUNT) / 1_000_000).toFixed(2);
+          sendTelegramMessage({
+            text: formatRefillStartMessage(
+              "USDC",
+              refillAmount,
+              response.usdc.balanceFormatted,
+              response.usdc.thresholdFormatted,
+              response.usdc.walletBalanceFormatted || "0"
+            ),
+          }, "REFILL").catch((err) => {
+            console.error("[REFILL] Failed to send Telegram notification (USDC refill start):", err?.message || err);
+          });
+
           // Transfer tokens
           const txHash = await walletClient.writeContract({
             address: USDC_TESTNET_ADDRESS,
@@ -190,6 +205,19 @@ export async function GET(request: NextRequest) {
             response.usdc.balance = newBalance.toString();
             response.usdc.balanceFormatted = (Number(newBalance) / 1_000_000).toFixed(2);
             console.log(`[REFILL] New USDC balance: ${response.usdc.balanceFormatted}`);
+
+            // Send Telegram notification: Refill completed
+            sendTelegramMessage({
+              text: formatRefillCompleteMessage(
+                "USDC",
+                refillAmount,
+                response.usdc.balanceFormatted,
+                txHash,
+                true
+              ),
+            }, "REFILL").catch((err) => {
+              console.error("[REFILL] Failed to send Telegram notification (USDC refill complete):", err?.message || err);
+            });
           } else {
             throw new Error("Transaction failed");
           }
@@ -249,6 +277,23 @@ export async function GET(request: NextRequest) {
       response.usdc.error = errorMsg;
       response.errors.push(errorMsg);
       console.error(`[REFILL] ❌ ${errorMsg}`, error);
+      
+      // Send Telegram notification: Refill failed
+      if (response.usdc.refilled === false && response.usdc.checked === true) {
+        const refillAmount = (Number(USDC_REFILL_AMOUNT) / 1_000_000).toFixed(2);
+        sendTelegramMessage({
+          text: formatRefillCompleteMessage(
+            "USDC",
+            refillAmount,
+            response.usdc.balanceFormatted,
+            response.usdc.txHash || "N/A",
+            false,
+            errorMsg
+          ),
+        }, "REFILL").catch((err) => {
+          console.error("[REFILL] Failed to send Telegram notification (USDC refill error):", err?.message || err);
+        });
+      }
     }
 
     // Check and refill EURC
@@ -285,6 +330,20 @@ export async function GET(request: NextRequest) {
         if (walletBalance >= EURC_REFILL_AMOUNT) {
           console.log(`[REFILL] Refilling EURC with ${Number(EURC_REFILL_AMOUNT) / 1_000_000} EURC...`);
 
+          // Send Telegram notification: Refill starting
+          const refillAmount = (Number(EURC_REFILL_AMOUNT) / 1_000_000).toFixed(2);
+          sendTelegramMessage({
+            text: formatRefillStartMessage(
+              "EURC",
+              refillAmount,
+              response.eurc.balanceFormatted,
+              response.eurc.thresholdFormatted,
+              response.eurc.walletBalanceFormatted || "0"
+            ),
+          }, "REFILL").catch((err) => {
+            console.error("[REFILL] Failed to send Telegram notification (EURC refill start):", err?.message || err);
+          });
+
           // Transfer tokens (nonce is handled automatically by viem)
           const txHash = await walletClient.writeContract({
             address: EURC_TESTNET_ADDRESS,
@@ -317,6 +376,19 @@ export async function GET(request: NextRequest) {
             response.eurc.balance = newBalance.toString();
             response.eurc.balanceFormatted = (Number(newBalance) / 1_000_000).toFixed(2);
             console.log(`[REFILL] New EURC balance: ${response.eurc.balanceFormatted}`);
+
+            // Send Telegram notification: Refill completed
+            sendTelegramMessage({
+              text: formatRefillCompleteMessage(
+                "EURC",
+                refillAmount,
+                response.eurc.balanceFormatted,
+                txHash,
+                true
+              ),
+            }, "REFILL").catch((err) => {
+              console.error("[REFILL] Failed to send Telegram notification (EURC refill complete):", err?.message || err);
+            });
           } else {
             throw new Error("Transaction failed");
           }
@@ -334,6 +406,23 @@ export async function GET(request: NextRequest) {
       response.eurc.error = errorMsg;
       response.errors.push(errorMsg);
       console.error(`[REFILL] ❌ ${errorMsg}`, error);
+      
+      // Send Telegram notification: Refill failed
+      if (response.eurc.refilled === false && response.eurc.checked === true) {
+        const refillAmount = (Number(EURC_REFILL_AMOUNT) / 1_000_000).toFixed(2);
+        sendTelegramMessage({
+          text: formatRefillCompleteMessage(
+            "EURC",
+            refillAmount,
+            response.eurc.balanceFormatted,
+            response.eurc.txHash || "N/A",
+            false,
+            errorMsg
+          ),
+        }, "REFILL").catch((err) => {
+          console.error("[REFILL] Failed to send Telegram notification (EURC refill error):", err?.message || err);
+        });
+      }
     }
 
     const duration = Date.now() - startTime;
