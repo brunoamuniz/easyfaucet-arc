@@ -63,13 +63,18 @@ export async function checkUSDCBalance(
       : USDC_TESTNET_ADDRESS; // ARC Testnet USDC
 
   // Log initial parameters for debugging
-  console.log(`[BRIDGE] Checking USDC balance on chain ${chainId}`);
+  console.log(`[BRIDGE] ========================================`);
+  console.log(`[BRIDGE] Starting USDC balance check`);
+  console.log(`[BRIDGE] Chain ID: ${chainId}`);
   console.log(`[BRIDGE] Wallet address: ${address}`);
   console.log(`[BRIDGE] USDC contract address: ${usdcAddress}`);
   console.log(`[BRIDGE] Primary RPC URL: ${rpcUrl}`);
-  console.log(`[BRIDGE] Total fallback RPCs: ${rpcUrls.length}`);
+  console.log(`[BRIDGE] Total fallback RPCs available: ${rpcUrls.length}`);
+  console.log(`[BRIDGE] RPC list: ${rpcUrls.map((url, idx) => `${idx + 1}. ${url}`).join(', ')}`);
+  console.log(`[BRIDGE] ========================================`);
 
   let lastError: any = null;
+  let successfulRpc: string | null = null;
 
   // Try each RPC URL with retry logic
   for (let i = 0; i < rpcUrls.length; i++) {
@@ -77,11 +82,13 @@ export async function checkUSDCBalance(
     const attemptStartTime = Date.now();
     
     try {
-      console.log(`[BRIDGE] ========================================`);
-      console.log(`[BRIDGE] Attempt ${i + 1}/${rpcUrls.length} with RPC: ${currentRpcUrl}`);
-      console.log(`[BRIDGE] Chain ID: ${chainId}`);
-      console.log(`[BRIDGE] Contract: ${usdcAddress}`);
-      console.log(`[BRIDGE] Wallet: ${address}`);
+      console.log(`[BRIDGE] ┌───────────────────────────────────────`);
+      console.log(`[BRIDGE] │ Attempt ${i + 1}/${rpcUrls.length}`);
+      console.log(`[BRIDGE] │ RPC: ${currentRpcUrl}`);
+      console.log(`[BRIDGE] │ Chain ID: ${chainId}`);
+      console.log(`[BRIDGE] │ Contract: ${usdcAddress}`);
+      console.log(`[BRIDGE] │ Wallet: ${address}`);
+      console.log(`[BRIDGE] │ Starting request...`);
       
       const publicClient = createPublicClient({
         chain: chainId === 11155111 ? sepolia : arcTestnet,
@@ -92,7 +99,7 @@ export async function checkUSDCBalance(
         }),
       });
 
-      console.log(`[BRIDGE] Calling readContract...`);
+      console.log(`[BRIDGE] │ Calling readContract (balanceOf)...`);
       const balance = await publicClient.readContract({
         address: usdcAddress as `0x${string}`,
         abi: ERC20_ABI,
@@ -102,13 +109,16 @@ export async function checkUSDCBalance(
 
       const attemptDuration = Date.now() - attemptStartTime;
       const balanceFormatted = (Number(balance) / 1_000_000).toFixed(2);
+      successfulRpc = currentRpcUrl;
       
-      console.log(`[BRIDGE] ✅ SUCCESS with RPC: ${currentRpcUrl}`);
-      console.log(`[BRIDGE] Duration: ${attemptDuration}ms`);
-      console.log(`[BRIDGE] Raw balance: ${balance.toString()}`);
-      console.log(`[BRIDGE] Formatted balance: ${balanceFormatted} USDC`);
-      console.log(`[BRIDGE] Has enough: ${balance > BigInt(0)}`);
-      console.log(`[BRIDGE] ========================================`);
+      console.log(`[BRIDGE] │ ✅ SUCCESS!`);
+      console.log(`[BRIDGE] │ Duration: ${attemptDuration}ms`);
+      console.log(`[BRIDGE] │ Raw balance: ${balance.toString()}`);
+      console.log(`[BRIDGE] │ Formatted balance: ${balanceFormatted} USDC`);
+      console.log(`[BRIDGE] │ Has enough: ${balance > BigInt(0)}`);
+      console.log(`[BRIDGE] │ Working RPC: ${currentRpcUrl}`);
+      console.log(`[BRIDGE] └───────────────────────────────────────`);
+      console.log(`[BRIDGE] Balance check completed successfully using RPC ${i + 1}/${rpcUrls.length}`);
 
       return {
         balance: balance as bigint,
@@ -120,33 +130,37 @@ export async function checkUSDCBalance(
       const errorMsg = error?.message || error?.shortMessage || String(error);
       const errorType = error?.constructor?.name || "Unknown";
       
-      console.error(`[BRIDGE] ❌ FAILED (${i + 1}/${rpcUrls.length})`);
-      console.error(`[BRIDGE] RPC: ${currentRpcUrl}`);
-      console.error(`[BRIDGE] Duration: ${attemptDuration}ms`);
-      console.error(`[BRIDGE] Error type: ${errorType}`);
-      console.error(`[BRIDGE] Error message: ${errorMsg}`);
+      console.error(`[BRIDGE] │ ❌ FAILED`);
+      console.error(`[BRIDGE] │ Duration: ${attemptDuration}ms`);
+      console.error(`[BRIDGE] │ Error type: ${errorType}`);
+      console.error(`[BRIDGE] │ Error message: ${errorMsg.substring(0, 200)}`);
       
       if (error?.cause) {
-        console.error(`[BRIDGE] Error cause: ${error.cause?.message || error.cause}`);
+        const causeMsg = error.cause?.message || String(error.cause);
+        console.error(`[BRIDGE] │ Error cause: ${causeMsg.substring(0, 200)}`);
       }
       
       if (error?.url) {
-        console.error(`[BRIDGE] Failed URL: ${error.url}`);
+        console.error(`[BRIDGE] │ Failed URL: ${error.url}`);
       }
       
       lastError = error;
       
       // If it's the last RPC URL, return error result instead of throwing
       if (i === rpcUrls.length - 1) {
+        console.error(`[BRIDGE] │ This was the last RPC attempt`);
+        console.error(`[BRIDGE] └───────────────────────────────────────`);
         console.error(`[BRIDGE] ========================================`);
         console.error(`[BRIDGE] ❌ ALL ${rpcUrls.length} RPC ATTEMPTS FAILED`);
         console.error(`[BRIDGE] Chain ID: ${chainId}`);
         console.error(`[BRIDGE] Wallet: ${address}`);
         console.error(`[BRIDGE] Contract: ${usdcAddress}`);
         console.error(`[BRIDGE] Last error type: ${errorType}`);
-        console.error(`[BRIDGE] Last error: ${errorMsg}`);
-        console.error(`[BRIDGE] Returning zero balance to allow cron job to continue`);
+        console.error(`[BRIDGE] Last error: ${errorMsg.substring(0, 300)}`);
         console.error(`[BRIDGE] ========================================`);
+        console.error(`[BRIDGE] Returning zero balance to allow cron job to continue`);
+        console.error(`[BRIDGE] The bridge will be skipped on this run`);
+        console.error(`[BRIDGE] Next cron job will retry in 10 minutes`);
         
         // Return zero balance instead of throwing to allow the process to continue
         // The bridge will be skipped but won't crash the cron job
@@ -158,8 +172,9 @@ export async function checkUSDCBalance(
       }
       
       // Try next RPC URL
-      console.log(`[BRIDGE] Retrying with next RPC URL...`);
-      console.log(`[BRIDGE] ========================================`);
+      console.error(`[BRIDGE] │ Will try next RPC...`);
+      console.error(`[BRIDGE] └───────────────────────────────────────`);
+      console.log(`[BRIDGE] Moving to next RPC (${i + 2}/${rpcUrls.length})...`);
     }
   }
 
