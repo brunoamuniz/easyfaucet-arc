@@ -40,14 +40,16 @@ export async function checkUSDCBalance(
 ): Promise<BalanceCheckResult> {
   // Fallback RPC URLs for Sepolia (public RPCs)
   // Using multiple public RPCs for better reliability
+  // Order: Try faster/more reliable RPCs first
   const sepoliaFallbackRPCs = [
     rpcUrl, // Primary RPC (from env or default)
-    "https://rpc.sepolia.org",
-    "https://ethereum-sepolia-rpc.publicnode.com",
-    "https://sepolia.gateway.tenderly.co",
-    "https://rpc2.sepolia.org",
+    "https://ethereum-sepolia-rpc.publicnode.com", // PublicNode - usually faster
+    "https://sepolia.gateway.tenderly.co", // Tenderly - reliable
+    "https://rpc2.sepolia.org", // Sepolia official RPC #2
+    "https://rpc.sepolia.org", // Sepolia official RPC #1 (often slow)
     "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161", // Public Infura endpoint
     "https://eth-sepolia.g.alchemy.com/v2/demo", // Alchemy public endpoint
+    "https://sepolia.drpc.org", // dRPC - additional fallback
   ];
 
   // Fallback RPC URLs for ARC Testnet
@@ -93,9 +95,9 @@ export async function checkUSDCBalance(
       const publicClient = createPublicClient({
         chain: chainId === 11155111 ? sepolia : arcTestnet,
         transport: http(currentRpcUrl, {
-          timeout: 15000, // 15 seconds timeout per request (increased from 10s)
-          retryCount: 2, // Retry twice per RPC (increased from 1)
-          retryDelay: 1000, // 1 second between retries (increased from 500ms)
+          timeout: 20000, // 20 seconds timeout per request (increased for slow RPCs)
+          retryCount: 1, // Retry once per RPC (reduced to avoid long waits)
+          retryDelay: 500, // 500ms between retries
         }),
       });
 
