@@ -12,10 +12,5 @@
       "path": "/api/refill",
       "schedule": "*/10 * * * *"
     }
-    // Bridge automático DESABILITADO - monitoramento manual no Cursor
-    // {
-    //   "path": "/api/bridge/auto",
-    //   "schedule": "*/10 * * * *"
-    // }
   ]
 }
