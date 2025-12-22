@@ -5,6 +5,7 @@ import { sepolia } from "@/lib/config/bridge";
 import { arcTestnet } from "@/lib/config/chains";
 import { USDC_TESTNET_ADDRESS } from "@/lib/config/faucet";
 import { ERC20_ABI } from "@/lib/contracts/ERC20.abi";
+import { addPendingBridge } from "@/lib/services/pending-bridges";
 
 /**
  * Bridge Service
@@ -21,6 +22,14 @@ interface BridgeResult {
   toChain?: string;
   error?: string;
   message?: string;
+  state?: string; // 'pending' | 'success' | 'error'
+  steps?: Array<{
+    name: string;
+    state: string;
+    txHash?: string;
+    error?: string;
+  }>;
+  needsRetry?: boolean;
 }
 
 interface BalanceCheckResult {
@@ -236,16 +245,185 @@ export async function bridgeUSDC(
       recipient: recipientAddress,
     });
 
-    console.log(`[BRIDGE] ✅ Bridge initiated successfully`);
-    console.log(`[BRIDGE] Transaction hash: ${result.transactionHash}`);
+    // Log detailed bridge result
+    console.log(`[BRIDGE] ========================================`);
+    console.log(`[BRIDGE] Bridge Result Details:`);
+    console.log(`[BRIDGE] State: ${result.state || 'unknown'}`);
+    console.log(`[BRIDGE] Transaction Hash: ${result.transactionHash || 'N/A'}`);
+    
+    if (result.steps && result.steps.length > 0) {
+      console.log(`[BRIDGE] Steps (${result.steps.length}):`);
+      result.steps.forEach((step, index) => {
+        console.log(`[BRIDGE]   ${index + 1}. ${step.name}: ${step.state}`);
+        if (step.txHash) {
+          console.log(`[BRIDGE]      TX Hash: ${step.txHash}`);
+        }
+        if (step.error) {
+          console.error(`[BRIDGE]      Error: ${step.error}`);
+        }
+      });
+    }
+    console.log(`[BRIDGE] ========================================`);
 
+    // Check if bridge completed successfully
+    if (result.state === 'success') {
+      console.log(`[BRIDGE] ✅ Bridge completed successfully!`);
+      return {
+        success: true,
+        transactionHash: result.transactionHash,
+        amount,
+        fromChain: "Ethereum_Sepolia",
+        toChain: "Arc_Testnet",
+        message: "Bridge completed successfully",
+        state: result.state,
+        steps: result.steps?.map(step => ({
+          name: step.name,
+          state: step.state,
+          txHash: step.txHash,
+          error: step.error,
+        })),
+      };
+    }
+
+    // Check if bridge is pending
+    if (result.state === 'pending') {
+      console.log(`[BRIDGE] ⏳ Bridge is pending (may take 5-15 minutes)`);
+      
+      // Log which steps completed and which are pending
+      const completedSteps = result.steps?.filter(step => step.state === 'success') || [];
+      const pendingSteps = result.steps?.filter(step => step.state === 'pending') || [];
+      
+      console.log(`[BRIDGE] Completed steps: ${completedSteps.map(s => s.name).join(', ')}`);
+      console.log(`[BRIDGE] Pending steps: ${pendingSteps.map(s => s.name).join(', ')}`);
+      
+      // If burn completed but mint is pending, add to pending bridges list
+      const burnStep = result.steps?.find(step => step.name === 'burn' && step.state === 'success');
+      if (burnStep && burnStep.txHash) {
+        console.log(`[BRIDGE] ⚠️ Burn completed but mint pending. Adding to pending bridges...`);
+        console.log(`[BRIDGE]    Burn TX: ${burnStep.txHash}`);
+        console.log(`[BRIDGE]    API Recovery: POST /api/bridge/recover with burnTxHash`);
+        console.log(`[BRIDGE]    The system will automatically retry when attestation is ready`);
+        
+        // Add to pending bridges for automatic recovery
+        try {
+          addPendingBridge(burnStep.txHash, recipientAddress, amount);
+          console.log(`[BRIDGE] ✅ Added to pending bridges list for automatic recovery`);
+        } catch (error: any) {
+          console.error(`[BRIDGE] ⚠️ Failed to add to pending bridges: ${error.message}`);
+          // Don't fail the bridge operation if this fails
+        }
+      }
+      
+      return {
+        success: true,
+        transactionHash: result.transactionHash,
+        amount,
+        fromChain: "Ethereum_Sepolia",
+        toChain: "Arc_Testnet",
+        message: "Bridge initiated and pending completion",
+        state: result.state,
+        steps: result.steps?.map(step => ({
+          name: step.name,
+          state: step.state,
+          txHash: step.txHash,
+          error: step.error,
+        })),
+        recoveryInfo: burnStep?.txHash ? {
+          burnTxHash: burnStep.txHash,
+          apiRecoveryEndpoint: "/api/bridge/recover",
+          note: "The system will automatically retry when attestation is ready",
+        } : undefined,
+      };
+    }
+
+    // Check if bridge failed and needs retry
+    if (result.state === 'error') {
+      console.error(`[BRIDGE] ❌ Bridge failed with error state`);
+      
+      // Try to retry the bridge
+      console.log(`[BRIDGE] Attempting to retry bridge...`);
+      try {
+        const retryResult = await kit.retry(result, {
+          from: sepoliaAdapter,
+          to: arcAdapter,
+        });
+
+        console.log(`[BRIDGE] Retry result state: ${retryResult.state || 'unknown'}`);
+        
+        if (retryResult.state === 'success' || retryResult.state === 'pending') {
+          console.log(`[BRIDGE] ✅ Bridge retry successful`);
+          return {
+            success: true,
+            transactionHash: retryResult.transactionHash,
+            amount,
+            fromChain: "Ethereum_Sepolia",
+            toChain: "Arc_Testnet",
+            message: "Bridge retry successful",
+            state: retryResult.state,
+            steps: retryResult.steps?.map(step => ({
+              name: step.name,
+              state: step.state,
+              txHash: step.txHash,
+              error: step.error,
+            })),
+          };
+        }
+
+        // Retry also failed
+        const failedStep = result.steps?.find(step => step.state === 'error');
+        const errorMessage = failedStep?.error || 'Bridge failed and retry also failed';
+        
+        console.error(`[BRIDGE] ❌ Bridge retry also failed: ${errorMessage}`);
+        return {
+          success: false,
+          error: errorMessage,
+          message: "Bridge failed and retry also failed",
+          state: retryResult.state || 'error',
+          steps: retryResult.steps?.map(step => ({
+            name: step.name,
+            state: step.state,
+            txHash: step.txHash,
+            error: step.error,
+          })),
+          needsRetry: true,
+        };
+      } catch (retryError: any) {
+        console.error(`[BRIDGE] ❌ Failed to retry bridge:`, retryError);
+        const failedStep = result.steps?.find(step => step.state === 'error');
+        const errorMessage = failedStep?.error || retryError.message || 'Bridge failed and retry threw exception';
+        
+        return {
+          success: false,
+          error: errorMessage,
+          message: "Bridge failed and retry threw exception",
+          state: 'error',
+          steps: result.steps?.map(step => ({
+            name: step.name,
+            state: step.state,
+            txHash: step.txHash,
+            error: step.error,
+          })),
+          needsRetry: true,
+        };
+      }
+    }
+
+    // Unknown state
+    console.warn(`[BRIDGE] ⚠️ Unknown bridge state: ${result.state}`);
     return {
       success: true,
       transactionHash: result.transactionHash,
       amount,
       fromChain: "Ethereum_Sepolia",
       toChain: "Arc_Testnet",
-      message: "Bridge initiated successfully",
+      message: `Bridge initiated with unknown state: ${result.state}`,
+      state: result.state,
+      steps: result.steps?.map(step => ({
+        name: step.name,
+        state: step.state,
+        txHash: step.txHash,
+        error: step.error,
+      })),
     };
   } catch (error: any) {
     console.error(`[BRIDGE] ❌ Bridge failed:`, error);
@@ -263,6 +441,47 @@ export async function bridgeUSDC(
       success: false,
       error: error.message || "Unknown bridge error",
       message: error.message,
+    };
+  }
+}
+
+/**
+ * Check bridge status by verifying balances
+ * This is a workaround since Bridge Kit doesn't provide a direct status check method
+ * We check if the USDC arrived on the destination chain
+ */
+export async function checkBridgeStatus(
+  transactionHash: string,
+  recipientAddress: string,
+  expectedAmount: string,
+  privateKey: string
+): Promise<{ completed: boolean; error?: string; currentBalance?: string }> {
+  console.log(`[BRIDGE] Checking bridge status...`);
+  console.log(`[BRIDGE] Transaction hash: ${transactionHash}`);
+  console.log(`[BRIDGE] Expected amount: ${expectedAmount} USDC`);
+  console.log(`[BRIDGE] Recipient: ${recipientAddress}`);
+
+  try {
+    // Check balance on ARC Testnet
+    const arcRpcUrl = process.env.ARC_TESTNET_RPC_URL || "https://rpc.testnet.arc.network";
+    const arcBalance = await checkUSDCBalance(5042002, recipientAddress, arcRpcUrl);
+    
+    console.log(`[BRIDGE] Current ARC balance: ${arcBalance.balanceFormatted} USDC`);
+    
+    // Note: This is a simple check - we can't definitively know if this specific
+    // transaction completed without tracking the balance before the bridge
+    // For now, we'll assume if there's USDC on ARC, the bridge may have completed
+    // A better solution would be to track the balance before bridge and compare
+    
+    return {
+      completed: arcBalance.hasEnough,
+      currentBalance: arcBalance.balanceFormatted,
+    };
+  } catch (error: any) {
+    console.error(`[BRIDGE] Error checking bridge status:`, error);
+    return {
+      completed: false,
+      error: error.message || "Failed to check bridge status",
     };
   }
 }

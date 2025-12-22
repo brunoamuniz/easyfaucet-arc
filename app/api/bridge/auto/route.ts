@@ -3,6 +3,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { checkUSDCBalance, bridgeUSDC } from "@/lib/services/bridge-service";
 import { BRIDGE_CONFIG } from "@/lib/config/bridge";
 import { sendTelegramMessage, formatBridgeStartMessage, formatBridgeCompleteMessage } from "@/lib/services/telegram-bot";
+import { getPendingBridges, updateLastChecked, markMintCompleted, removePendingBridge } from "@/lib/services/pending-bridges";
+import { recoverPendingBridge } from "@/lib/services/bridge-recovery";
 
 /**
  * GET /api/bridge/auto
@@ -147,6 +149,10 @@ export async function GET(request: NextRequest) {
       console.log(`[BRIDGE_AUTO:${requestId}] Current balance: ${sepoliaBalance.balanceFormatted} USDC`);
       console.log(`[BRIDGE_AUTO:${requestId}] Action: SKIPPED (insufficient balance)`);
       
+      // Even if no new bridge, check pending bridges
+      console.log(`[BRIDGE_AUTO:${requestId}] Checking pending bridges for automatic mint completion...`);
+      await processPendingBridges(requestId, privateKey);
+      
       return NextResponse.json({
         success: true,
         message: "No USDC on Sepolia to bridge",
@@ -210,15 +216,31 @@ export async function GET(request: NextRequest) {
       const bridgeDuration = Date.now() - bridgeStartTime;
       console.log(`[BRIDGE_AUTO:${requestId}] Bridge service call completed in ${bridgeDuration}ms`);
       console.log(`[BRIDGE_AUTO:${requestId}] Bridge result success: ${bridgeResult.success}`);
+      console.log(`[BRIDGE_AUTO:${requestId}] Bridge state: ${bridgeResult.state || 'unknown'}`);
       
       if (bridgeResult.transactionHash) {
         console.log(`[BRIDGE_AUTO:${requestId}] Transaction hash: ${bridgeResult.transactionHash}`);
+      }
+      if (bridgeResult.steps && bridgeResult.steps.length > 0) {
+        console.log(`[BRIDGE_AUTO:${requestId}] Bridge steps:`);
+        bridgeResult.steps.forEach((step, index) => {
+          console.log(`[BRIDGE_AUTO:${requestId}]   ${index + 1}. ${step.name}: ${step.state}`);
+          if (step.txHash) {
+            console.log(`[BRIDGE_AUTO:${requestId}]      TX: ${step.txHash}`);
+          }
+          if (step.error) {
+            console.error(`[BRIDGE_AUTO:${requestId}]      Error: ${step.error}`);
+          }
+        });
       }
       if (bridgeResult.error) {
         console.error(`[BRIDGE_AUTO:${requestId}] Bridge error: ${bridgeResult.error}`);
       }
       if (bridgeResult.message) {
         console.log(`[BRIDGE_AUTO:${requestId}] Bridge message: ${bridgeResult.message}`);
+      }
+      if (bridgeResult.needsRetry) {
+        console.warn(`[BRIDGE_AUTO:${requestId}] ⚠️ Bridge needs manual retry`);
       }
     } catch (error: any) {
       console.error(`[BRIDGE_AUTO:${requestId}] ❌ Exception during bridge execution:`);
@@ -273,6 +295,10 @@ export async function GET(request: NextRequest) {
     console.log(`[BRIDGE_AUTO:${requestId}] To: ${bridgeResult.toChain}`);
     console.log(`[BRIDGE_AUTO:${requestId}] Note: Bridge can take 5-15 minutes to complete`);
     console.log(`[BRIDGE_AUTO:${requestId}] ========================================`);
+    
+    // Step 2: Check and process pending bridges
+    console.log(`[BRIDGE_AUTO:${requestId}] Checking pending bridges for automatic mint completion...`);
+    await processPendingBridges(requestId, privateKey);
 
     // Send Telegram notification: Bridge completed (initiated successfully)
     // Note: The actual bridge completion on-chain takes 5-15 minutes
@@ -293,9 +319,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Bridge initiated successfully",
-      action: "bridged",
+      message: bridgeResult.message || "Bridge initiated successfully",
+      action: bridgeResult.state === 'success' ? "completed" : "bridged",
       transactionHash: bridgeResult.transactionHash,
+      state: bridgeResult.state,
+      steps: bridgeResult.steps,
       amount: bridgeAmountFormatted,
       fromChain: bridgeResult.fromChain,
       toChain: bridgeResult.toChain,
@@ -304,7 +332,12 @@ export async function GET(request: NextRequest) {
         sepolia: sepoliaBalance.balanceFormatted,
         arc: arcBalance.balanceFormatted,
       },
-      note: "Bridge can take 5-15 minutes to complete. Check ARC Testnet balance after completion.",
+      needsRetry: bridgeResult.needsRetry,
+      note: bridgeResult.state === 'success' 
+        ? "Bridge completed successfully!" 
+        : bridgeResult.state === 'pending'
+        ? "Bridge is pending and may take 5-15 minutes to complete. The system will automatically complete the mint when attestation is ready."
+        : "Bridge can take 5-15 minutes to complete. The system will automatically complete the mint when attestation is ready.",
       duration: `${duration}ms`,
       timestamp,
       requestId,
@@ -344,4 +377,56 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Process pending bridges - verifica attestations e completa mints automaticamente
+ */
+async function processPendingBridges(requestId: string, privateKey: string): Promise<void> {
+  const pendingBridgesList = getPendingBridges();
+  
+  if (pendingBridgesList.length === 0) {
+    console.log(`[BRIDGE_AUTO:${requestId}] No pending bridges to process`);
+    return;
+  }
+
+  console.log(`[BRIDGE_AUTO:${requestId}] Found ${pendingBridgesList.length} pending bridge(s) to check`);
+  
+  for (const bridge of pendingBridgesList) {
+    try {
+      console.log(`[BRIDGE_AUTO:${requestId}] Processing pending bridge: ${bridge.burnTxHash}`);
+      updateLastChecked(bridge.burnTxHash);
+      
+      // Try to recover (this will check attestation and complete mint if ready)
+      const recoveryResult = await recoverPendingBridge(
+        bridge.burnTxHash,
+        bridge.recipient,
+        privateKey
+      );
+      
+      if (recoveryResult.success && recoveryResult.mintTxHash) {
+        console.log(`[BRIDGE_AUTO:${requestId}] ✅ Mint completed automatically for bridge: ${bridge.burnTxHash}`);
+        console.log(`[BRIDGE_AUTO:${requestId}] Mint TX: ${recoveryResult.mintTxHash}`);
+        
+        markMintCompleted(bridge.burnTxHash, recoveryResult.mintTxHash);
+        removePendingBridge(bridge.burnTxHash);
+        
+        // Send notification
+        sendTelegramMessage({
+          text: `✅ Bridge mint completed automatically!\n\nBurn TX: ${bridge.burnTxHash}\nMint TX: ${recoveryResult.mintTxHash}\nAmount: ${bridge.amount} USDC`,
+        }, `BRIDGE_AUTO:${requestId}`).catch(() => {});
+      } else if (recoveryResult.error?.includes("expired")) {
+        console.log(`[BRIDGE_AUTO:${requestId}] ⚠️ Bridge expired: ${bridge.burnTxHash}`);
+        // Don't remove - keep for reference
+      } else {
+        console.log(`[BRIDGE_AUTO:${requestId}] ⏳ Bridge still pending attestation: ${bridge.burnTxHash}`);
+        console.log(`[BRIDGE_AUTO:${requestId}] Status: ${recoveryResult.message || 'Waiting for attestation'}`);
+      }
+    } catch (error: any) {
+      console.error(`[BRIDGE_AUTO:${requestId}] Error processing bridge ${bridge.burnTxHash}:`, error.message);
+      // Continue with next bridge
+    }
+  }
+  
+  console.log(`[BRIDGE_AUTO:${requestId}] Finished processing pending bridges`);
 }
