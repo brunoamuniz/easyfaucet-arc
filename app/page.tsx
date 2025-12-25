@@ -50,8 +50,8 @@ function getDeviceId(): string {
   return deviceId;
 }
 
-// Rate limiting: Maximum 20 claims per 24 hours per device (shared between USDC and EURC)
-const RATE_LIMIT_MAX_REQUESTS = 20;
+// Rate limiting: Maximum 10 claims per 24 hours per device (shared between USDC and EURC)
+const RATE_LIMIT_MAX_REQUESTS = 10;
 const RATE_LIMIT_WINDOW = 24 * 60 * 60 * 1000; // 24 hours
 
 // Check rate limit in localStorage (read-only, doesn't increment)
@@ -488,7 +488,7 @@ export default function FaucetPage() {
     const rateLimitCheck = checkRateLimitLocal();
     if (!rateLimitCheck.allowed) {
       const hoursUntilReset = Math.ceil((rateLimitCheck.resetTime - Date.now()) / (1000 * 60 * 60));
-      setErrorMessage(`Rate limit exceeded. Maximum 20 claims per 24 hours (shared between USDC and EURC). Please try again in ${hoursUntilReset} hour(s).`);
+      setErrorMessage(`Rate limit exceeded. Maximum 10 claims per 24 hours (shared between USDC and EURC). Please try again in ${hoursUntilReset} hour(s).`);
       setFaucetStatus("error");
       setRateLimitInfo({
         remainingRequests: 0,
@@ -537,7 +537,7 @@ export default function FaucetPage() {
         // Handle rate limit error (429)
         if (response.status === 429) {
           const hoursUntilReset = data.hoursUntilReset || Math.ceil((data.resetTime - Date.now()) / (1000 * 60 * 60));
-          setErrorMessage(`Rate limit exceeded. Maximum 20 claims per 24 hours (shared between USDC and EURC). Please try again in ${hoursUntilReset} hour(s).`);
+          setErrorMessage(`Rate limit exceeded. Maximum 10 claims per 24 hours (shared between USDC and EURC). Please try again in ${hoursUntilReset} hour(s).`);
           setRateLimitInfo({
             remainingRequests: data.remainingRequests || 0,
             resetTime: data.resetTime || Date.now() + 24 * 60 * 60 * 1000,
@@ -824,7 +824,7 @@ export default function FaucetPage() {
               <AlertCircle className="h-4 w-4" style={{ color: "#EF4444" }} />
               <AlertTitle style={{ color: "#EF4444" }}>Rate limit exceeded</AlertTitle>
               <AlertDescription style={{ color: "#9CA3AF" }} className="mt-2">
-                You have reached the maximum of 20 claims per 24 hours (shared between USDC and EURC).
+                You have reached the maximum of 10 claims per 24 hours (shared between USDC and EURC).
                 {rateLimitInfo.resetTime > Date.now() && (
                   <span className="block mt-1">
                     Please try again in {Math.ceil((rateLimitInfo.resetTime - Date.now()) / (1000 * 60 * 60))} hour(s).

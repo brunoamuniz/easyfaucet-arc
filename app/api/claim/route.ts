@@ -67,10 +67,10 @@ if (process.env.REDIS_URL) {
 }
 
 // Rate limiting: Vercel KV (Redis) - persistent across all serverless instances
-// Shared limit between USDC and EURC: 20 claims per 24 hours per IP
+// Shared limit between USDC and EURC: 10 claims per 24 hours per IP
 // Uses same infrastructure in local and production - no fallback
 const RATE_LIMIT_WINDOW = 24 * 60 * 60; // 24 hours in seconds (for TTL)
-const RATE_LIMIT_MAX_REQUESTS = 20; // Max 20 requests per 24 hours per IP (shared between USDC and EURC)
+const RATE_LIMIT_MAX_REQUESTS = 10; // Max 10 requests per 24 hours per IP (shared between USDC and EURC)
 
 // Check rate limit (read-only, doesn't increment)
 // Always uses Redis - same infrastructure as production
@@ -280,7 +280,7 @@ export async function POST(request: NextRequest) {
       console.warn(`Rate limit exceeded for IP: ${ip} - ${rateLimitResult.remainingRequests} requests remaining`);
       return NextResponse.json(
         { 
-          error: "Rate limit exceeded. Maximum 20 claims per 24 hours per IP (shared between USDC and EURC).",
+          error: "Rate limit exceeded. Maximum 10 claims per 24 hours per IP (shared between USDC and EURC).",
           remainingRequests: 0,
           resetTime: rateLimitResult.resetTime,
           hoursUntilReset
