@@ -31,7 +31,7 @@ export const ARC_TESTNET_CHAIN_ID = 5042002;
 
 // Claim amounts per token (6 decimals for both USDC and EURC)
 export const CLAIM_AMOUNT_USDC = BigInt(100 * 10 ** 6); // 100 * 10^6 = 100,000,000 (100 USDC with 6 decimals)
-export const CLAIM_AMOUNT_EURC = BigInt(50 * 10 ** 6); // 50 * 10^6 = 50,000,000 (50 EURC with 6 decimals)
+export const CLAIM_AMOUNT_EURC = BigInt(10 * 10 ** 6); // 10 * 10^6 = 10,000,000 (10 EURC with 6 decimals)
 
 // Legacy: Keep CLAIM_AMOUNT for backward compatibility (defaults to USDC)
 export const CLAIM_AMOUNT = CLAIM_AMOUNT_USDC;

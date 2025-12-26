@@ -24,7 +24,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://easyfaucetarc.xyz";
 // Claim amounts per token (6 decimals for both USDC and EURC)
 const CLAIM_AMOUNTS = {
   USDC: 100,
-  EURC: 50, // Reduced from 100 to 50
+  EURC: 10, // Reduced from 50 to 10
 } as const;
 
 type FaucetStatus =
